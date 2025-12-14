@@ -7,7 +7,18 @@ support and validation for all system components.
 
 import os
 from typing import Dict, Any, Optional
-from pydantic import BaseSettings, Field
+
+try:
+    from pydantic_settings import BaseSettings, Field
+except ImportError:
+    # Fallback for older pydantic versions
+    try:
+        from pydantic import BaseSettings, Field
+    except ImportError:
+        # Final fallback - create a simple settings class
+        BaseSettings = object
+        def Field(default=None, **kwargs):
+            return default
 
 
 class Settings(BaseSettings):
