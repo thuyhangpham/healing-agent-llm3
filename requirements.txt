@@ -1,0 +1,50 @@
+# Core Dependencies for ETL Sentiment System
+
+# LangGraph and LangChain for workflow orchestration and LLM integration
+langgraph>=0.0.40
+langchain>=0.1.0
+langchain-community>=0.0.20
+
+# Web Scraping Dependencies
+selenium>=4.15.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# LLM Integration
+ollama>=0.1.7
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.24.0
+
+# Configuration and Validation
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+
+# Async Support
+asyncio-mqtt>=0.13.0
+aiofiles>=23.2.0
+
+# PDF Processing
+PyPDF2>=3.0.1
+pdfplumber>=0.9.0
+
+# Text Processing
+nltk>=3.8.1
+textblob>=0.17.1
+
+# HTTP and Network
+httpx>=0.25.0
+urllib3>=2.1.0
+
+# Date and Time
+python-dateutil>=2.8.2
+
+# JSON and Data Serialization
+orjson>=3.9.0
+
+# System Monitoring
+psutil>=5.9.0
+
+# Importlib for Hot Reload (built-in, but listing for clarity)
+# importlib is part of Python standard library

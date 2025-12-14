@@ -1,0 +1,66 @@
+# Agent Configuration
+
+# Law Search Agent Configuration
+law_search_agent:
+  enabled: true
+  sources:
+    - name: "example_gov_portal"
+      url: "https://example.gov/laws"
+      search_endpoint: "/search"
+      rate_limit: 1  # requests per second
+      timeout: 30
+  retry_config:
+    max_attempts: 3
+    backoff_factor: 2
+  selectors:
+    title_selector: "h1.law-title"
+    content_selector: "div.law-content"
+    date_selector: "span.law-date"
+
+# Opinion Search Agent Configuration
+opinion_search_agent:
+  enabled: true
+  sources:
+    - name: "example_news_site"
+      url: "https://example-news.com"
+      search_endpoint: "/search"
+      rate_limit: 1
+      timeout: 30
+  retry_config:
+    max_attempts: 3
+    backoff_factor: 2
+  selectors:
+    title_selector: "h1.article-title"
+    content_selector: "div.article-content"
+    author_selector: "span.author-name"
+
+# PDF Analysis Agent Configuration
+pdf_analysis_agent:
+  enabled: true
+  supported_formats: ["pdf"]
+  processing:
+    extract_text: true
+    extract_metadata: true
+    ocr_enabled: false
+  storage:
+    raw_files: "data/pdfs/raw"
+    processed_files: "data/pdfs/processed"
+
+# Sentiment Analysis Agent Configuration
+sentiment_analysis_agent:
+  enabled: true
+  model: "llama3"
+  sentiment_labels:
+    - "positive"
+    - "negative" 
+    - "neutral"
+  confidence_threshold: 0.7
+  batch_size: 10
+
+# Orchestrator Configuration
+orchestrator:
+  workflow_timeout: 300  # seconds
+  max_concurrent_agents: 5
+  state_persistence:
+    enabled: true
+    file_path: "data/state/orchestrator_state.json"

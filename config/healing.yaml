@@ -1,0 +1,109 @@
+# Healing Configuration
+
+# Healing Agent Configuration
+healing_agent:
+  enabled: true
+  max_attempts: 3
+  timeout_seconds: 30
+  backup_enabled: true
+  validation_enabled: true
+  
+  # LLM Configuration for Code Generation
+  llm_config:
+    model: "llama3"
+    temperature: 0.1
+    max_tokens: 2000
+    timeout: 30
+  
+  # Code Generation Prompts
+  prompts:
+    healing_prompt: |
+      You are an expert Python developer specializing in web scraping automation.
+      Analyze this error and generate a fix for the scraping code.
+      
+      ERROR DETAILS:
+      - Error Type: {error_type}
+      - Traceback: {traceback}
+      - Failed File: {file_path}
+      - HTML Snapshot: {html_snapshot}
+      
+      CURRENT CODE:
+      {current_code}
+      
+      REQUIREMENTS:
+      1. Fix the specific error (CSS selector, parsing logic, etc.)
+      2. Maintain existing functionality
+      3. Add error handling for similar issues
+      4. Return only the fixed Python code
+      5. Use robust selectors that are less likely to break
+      
+      Generate the complete fixed function or class:
+
+# Error Handler Configuration
+error_handler:
+  capture_html_snapshot: true
+  capture_traceback: true
+  max_error_context_size: 10000  # characters
+  
+  # Error Categories
+  error_categories:
+    network_errors:
+      - "ConnectionError"
+      - "TimeoutError"
+      - "HTTPError"
+    parsing_errors:
+      - "ValueError"
+      - "AttributeError"
+      - "KeyError"
+    structure_errors:
+      - "SelectorNotFound"
+      - "ElementMissing"
+      - "LayoutChanged"
+    access_errors:
+      - "PermissionError"
+      - "AuthenticationError"
+      - "RateLimitError"
+
+# Code Patcher Configuration
+code_patcher:
+  backup_extension: ".bak"
+  max_backup_files: 10
+  atomic_write: true
+  
+  # Hot Reload Configuration
+  hot_reload:
+    enabled: true
+    reload_delay: 1  # seconds
+    verify_after_reload: true
+
+# Code Validator Configuration
+code_validator:
+  syntax_check: true
+  logic_check: true
+  test_cases_enabled: true
+  
+  # Validation Rules
+  validation_rules:
+    max_function_length: 100
+    max_complexity: 10
+    require_docstrings: true
+
+# Metrics Configuration
+metrics:
+  collection_enabled: true
+  export_interval: 3600  # seconds
+  retention_days: 30
+  
+  # Metrics to Track
+  tracked_metrics:
+    - "mttr"
+    - "success_rate"
+    - "error_types"
+    - "healing_attempts"
+    - "repair_durability"
+  
+  # Export Configuration
+  export:
+    formats: ["json", "csv"]
+    directory: "data/metrics"
+    include_detailed_logs: true
