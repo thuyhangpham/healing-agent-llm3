@@ -1,66 +1,208 @@
 # Agent Configuration
 
-# Law Search Agent Configuration
-law_search_agent:
-  enabled: true
-  sources:
-    - name: "example_gov_portal"
-      url: "https://example.gov/laws"
-      search_endpoint: "/search"
-      rate_limit: 1  # requests per second
-      timeout: 30
-  retry_config:
-    max_attempts: 3
-    backoff_factor: 2
-  selectors:
-    title_selector: "h1.law-title"
-    content_selector: "div.law-content"
-    date_selector: "span.law-date"
-
-# Opinion Search Agent Configuration
-opinion_search_agent:
-  enabled: true
-  sources:
-    - name: "example_news_site"
-      url: "https://example-news.com"
-      search_endpoint: "/search"
-      rate_limit: 1
-      timeout: 30
-  retry_config:
-    max_attempts: 3
-    backoff_factor: 2
-  selectors:
-    title_selector: "h1.article-title"
-    content_selector: "div.article-content"
-    author_selector: "span.author-name"
-
-# PDF Analysis Agent Configuration
-pdf_analysis_agent:
-  enabled: true
-  supported_formats: ["pdf"]
-  processing:
-    extract_text: true
-    extract_metadata: true
-    ocr_enabled: false
-  storage:
-    raw_files: "data/pdfs/raw"
-    processed_files: "data/pdfs/processed"
-
-# Sentiment Analysis Agent Configuration
-sentiment_analysis_agent:
-  enabled: true
-  model: "llama3"
-  sentiment_labels:
-    - "positive"
-    - "negative" 
-    - "neutral"
-  confidence_threshold: 0.7
-  batch_size: 10
-
-# Orchestrator Configuration
-orchestrator:
-  workflow_timeout: 300  # seconds
-  max_concurrent_agents: 5
-  state_persistence:
+agents:
+  # Law Search Agent Configuration
+  law_search_agent:
+    id: "law_search_agent"
     enabled: true
-    file_path: "data/state/orchestrator_state.json"
+    type: "law_search"
+    version: "1.1.0"
+    description: "Searches and retrieves official Legal Documents related to Science & Technology"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "web_search"
+      - "document_retrieval"
+      - "legal_content"
+    sources:
+      - name: "vbpl_khcn"
+        url: "https://vbpl.vn/pages/timkiem.aspx"
+        rate_limit: 0.5
+        timeout: 60
+        selectors:
+          title_selector: "div.results ul li div.title"
+          content_selector: "div.content-body"
+          metadata_selectors:
+             doc_number: "p.kyhieu"
+             issue_date: "p.ngaybanhanh"
+    retry_config:
+      max_attempts: 3
+      backoff_factor: 2
+    
+    search_constraints:
+      doc_status: "Còn hiệu lực"
+      # Agent sẽ dùng list này nhập vào ô tìm kiếm của VBPL
+      search_queries:
+        - "Luật Công nghệ cao"
+        - "Luật Khoa học và công nghệ"
+        - "Luật An ninh mạng"
+        - "Luật Giao dịch điện tử"
+        - "Sở hữu trí tuệ"
+        - "Bảo vệ dữ liệu cá nhân"
+        - "Chuyển đổi số"
+        - "Trí tuệ nhân tạo"
+
+  # Opinion Search Agent Configuration
+  opinion_search_agent:
+    id: "opinion_search_agent"
+    enabled: true
+    type: "opinion_search"
+    version: "1.1.0"
+    description: "Searches for public opinion on Sci-Tech regulations in Vietnam"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "web_search"
+      - "content_retrieval"
+      - "opinion_mining"
+    sources:
+      # Nguồn 1: VnExpress - Mục Số hóa
+      - name: "vnexpress_sohoa"
+        url: "https://vnexpress.net/so-hoa"
+        search_endpoint: "/tim-kiem"
+        rate_limit: 1
+        timeout: 30
+        selectors:
+          title_selector: "h1.title-detail"
+          content_selector: "article.fck_detail"
+          author_selector: "p.author"
+          date_selector: "span.date"
+      
+      # Nguồn 2: Báo Chính Phủ - Mục KHCN
+      - name: "baochinhphu_khcn"
+        url: "https://baochinhphu.vn/khoa-giao/khoa-hoc-cong-nghe.htm"
+        search_endpoint: "/tim-kiem.htm"
+        rate_limit: 1
+        timeout: 30
+        selectors:
+          title_selector: "h1.title-detail"    
+          content_selector: "div.article-body" 
+          author_selector: "span.author"
+          date_selector: "span.publish-date"
+
+    search_constraints:
+      language: "vi"            
+      region: "VN"              
+      
+      # Logic: Bài viết hợp lệ = (Có keywords Tech) AND (Có keywords Law)
+      # Tách bạch 2 bộ từ khóa để tránh nhầm lẫn
+      topic_keywords:  # Về cái gì? (Công nghệ)
+        - "công nghệ"
+        - "AI"
+        - "trí tuệ nhân tạo"
+        - "dữ liệu"
+        - "an ninh mạng"
+        - "internet"
+        - "số hóa"
+        - "chuyển đổi số"
+        - "bán dẫn"
+        
+      context_keywords: # Về khía cạnh nào? (Pháp lý)
+        - "luật"
+        - "nghị định"
+        - "thông tư"
+        - "quy định"
+        - "chính sách"
+        - "dự thảo"
+        - "đề xuất"
+        - "vi phạm"
+        - "xử phạt"
+
+  # PDF Analysis Agent Configuration
+  pdf_analysis_agent:
+    id: "pdf_analysis_agent"
+    enabled: true
+    type: "pdf_analysis"
+    version: "1.0.0"
+    description: "Analyzes PDF documents and extracts text and metadata"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "pdf_processing"
+      - "text_extraction"
+      - "metadata_extraction"
+    supported_formats: ["pdf"]
+    processing:
+      extract_text: true
+      extract_metadata: true
+      ocr_enabled: false
+    storage:
+      raw_files: "data/pdfs/raw"
+      processed_files: "data/pdfs/processed"
+
+  # Sentiment Analysis Agent Configuration
+  sentiment_analysis_agent:
+    id: "sentiment_analysis_agent"
+    enabled: true
+    type: "sentiment_analysis"
+    version: "1.0.0"
+    description: "Performs sentiment analysis on text content"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "sentiment_analysis"
+      - "text_classification"
+      - "emotion_detection"
+    model: "llama3"
+    sentiment_labels: ["positive", "negative", "neutral"]
+    confidence_threshold: 0.7
+    batch_size: 10
+
+  # Healing Agent Configuration
+  healing_agent:
+    id: "healing_agent"
+    enabled: true
+    type: "healing"
+    version: "1.3.0"
+    description: "Self-healing agent for automated error detection and repair"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "error_detection"
+      - "code_analysis"
+      - "automated_healing"
+      - "hot_reload"
+      - "metrics_collection"
+    config_file: "config/healing.yaml"
+    dependencies:
+      - "llm_client"
+      - "error_detector"
+      - "code_patcher"
+      - "healing_metrics"
+    integration:
+      orchestrator:
+        auto_register: true
+        error_handler: true
+        status_reporting: true
+      global_state:
+        sync_enabled: true
+        healing_state_key: "healing_agent_state"
+    healing_targets:
+      - "law_search_agent"
+      - "opinion_search_agent"
+      - "pdf_analysis_agent"
+      - "sentiment_analysis_agent"
+    performance_targets:
+      mttr_seconds: 60
+      success_rate: 0.8
+      availability: 0.95
+
+  # Orchestrator Configuration
+  orchestrator:
+    id: "orchestrator"
+    enabled: true
+    type: "orchestrator"
+    version: "1.0.0"
+    description: "Central coordination agent for workflow management"
+    author: "ETL Sentiment Team"
+    capabilities:
+      - "workflow_coordination"
+      - "agent_management"
+      - "task_scheduling"
+      - "health_monitoring"
+    workflow_timeout: 300  
+    max_concurrent_agents: 5
+    health_check_interval: 30
+    state_persistence:
+      enabled: true
+      file_path: "data/state/orchestrator_state.json"
+    healing_integration:
+      enabled: true
+      auto_error_routing: true
+      healing_agent_id: "healing_agent"
+      error_forwarding: true

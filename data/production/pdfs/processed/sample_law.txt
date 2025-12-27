@@ -1,0 +1,12 @@
+LEGAL DOCUMENT: Law on Technology and AI Development
+
+This document outlines regulations for artificial intelligence development and technology sector in Vietnam.
+
+Key provisions:
+1. AI systems must undergo safety testing before deployment
+2. Data protection measures are mandatory for AI systems processing personal data
+3. Companies must establish ethics committees for AI governance
+4. Regular audits required for high-risk AI applications
+
+Effective date: January 1, 2024
+Regulatory body: Ministry of Science and Technology

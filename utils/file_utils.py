@@ -66,3 +66,19 @@ class FileUtils:
     def get_relative_path(file_path: str, base_path: str) -> str:
         """Get relative path from base path."""
         return os.path.relpath(file_path, base_path)
+
+
+# Convenience functions for backward compatibility
+def ensure_directory(path: str) -> None:
+    """Ensure directory exists, create if it doesn't."""
+    FileUtils.ensure_directory(path)
+
+
+def safe_write(file_path: str, content: str) -> None:
+    """Write content to file safely."""
+    FileUtils.write_file(file_path, content)
+
+
+def safe_read(file_path: str) -> str:
+    """Read file content safely."""
+    return FileUtils.read_file(file_path)

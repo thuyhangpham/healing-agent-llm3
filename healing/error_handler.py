@@ -13,4 +13,18 @@ class ErrorHandler:
     
     def capture_error(self, exception: Exception, agent_name: str) -> dict:
         """Capture comprehensive error context for healing analysis."""
-        raise NotImplementedError("Error capture functionality to be implemented")
+        from datetime import datetime
+        import traceback
+        
+        return {
+            'type': type(exception).__name__,
+            'message': str(exception),
+            'agent': agent_name,
+            'timestamp': datetime.utcnow().isoformat(),
+            'traceback': traceback.format_exc(),
+            'context': {
+                'module': exception.__class__.__module__,
+                'args': getattr(exception, 'args', None),
+                'kwargs': getattr(exception, 'kwargs', None)
+            }
+        }

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-12-27T17:34:38.331730",
+  "error_type": "Exception",
+  "error_message": "No articles found on page 4 - End of results",
+  "agent_name": "opinion_search_agent",
+  "function_name": "search_vnexpress",
+  "file_path": "D:\\Working\\etl-sentiment\\agents\\opinion_search_agent.py",
+  "selector_used": "article.item-news",
+  "severity": "critical"
+}
+ready_for_processing

@@ -62,3 +62,8 @@ class StructuredFormatter(logging.Formatter):
                     log_entry[key] = value
         
         return json.dumps(log_entry)
+
+
+def get_logger(name: str, level: str = "INFO") -> StructuredLogger:
+    """Get a structured logger instance."""
+    return StructuredLogger(name, level)

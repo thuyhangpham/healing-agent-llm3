@@ -1,0 +1,127 @@
+{
+  "analysis_timestamp": "2025-12-23T20:47:26.285739",
+  "total_articles": 8,
+  "summary": {
+    "positive": 0,
+    "negative": 0,
+    "neutral": 8,
+    "average_confidence": 0.688,
+    "analysis_methods": {
+      "llm": 5,
+      "rule_based_fallback": 3
+    }
+  },
+  "details": [
+    {
+      "article_id": "vnexpress_1766227308_1",
+      "title": "Robot hình người Trung Quốc tham gia sản xuất pin xe điện",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/robot-hinh-nguoi-trung-quoc-tham-gia-san-xuat-pin-xe-dien-4996231.html",
+      "sentiment": "neutral",
+      "confidence": 0.8,
+      "reasoning": "The news article does not explicitly discuss or relate to the legal document context of the Law on Technology and AI Development in Vietnam. The article focuses on CATL's deployment of robots at their factory, which is a commercial decision unrelated to the legal framework. Although the article mentions Xiaomo, a type of robot, it does not provide any information about how this technology relates to the legal regulations mentioned in the document.",
+      "analysis_timestamp": "2025-12-23T20:46:53.668473",
+      "analysis_method": "llm",
+      "model_used": "llama3:latest"
+    },
+    {
+      "article_id": "vnexpress_1766227308_2",
+      "title": "Người dùng chi ba tỷ USD cho ứng dụng ChatGPT",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/nguoi-dung-chi-ba-ty-usd-cho-ung-dung-chatgpt-4995800.html",
+      "sentiment": "neutral",
+      "confidence": 0.8,
+      "reasoning": "The news article does not explicitly discuss the Legal Document on Technology and AI Development. The title mentions ChatGPT, a popular AI-powered chatbot, but the content only talks about its financial performance, specifically earning $3 billion in 31 months, with most of it coming from 2025. There is no mention of the legal framework or policies mentioned in the legal document context. The tone of the article is informative and objective, providing a factual update on ChatGPT's financial success without expressing any opinion or emotion about the legal regulations surrounding AI development.",
+      "analysis_timestamp": "2025-12-23T20:46:59.107528",
+      "analysis_method": "llm",
+      "model_used": "llama3:latest"
+    },
+    {
+      "article_id": "vnexpress_1766227308_3",
+      "title": "Nơi yên tĩnh nhất Trái Đất",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/noi-yen-tinh-nhat-trai-dat-4995615.html",
+      "sentiment": "neutral",
+      "confidence": 0.8,
+      "reasoning": "The news article does not explicitly discuss the legal document context, specifically the Law on Technology and AI Development in Vietnam. The article appears to be a travel or tourism-related piece, describing Haleakala crater as one of the quietest places on Earth. There is no mention of artificial intelligence, technology, or policy implications. As such, I classify the sentiment as neutral, with high confidence that the article does not relate to the legal context.",
+      "analysis_timestamp": "2025-12-23T20:47:03.996911",
+      "analysis_method": "llm",
+      "model_used": "llama3:latest"
+    },
+    {
+      "article_id": "vnexpress_1766227308_4",
+      "title": "Soundcore R60i NC - tai nghe dịch thuật, pin 50 tiếng",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/soundcore-r60i-nc-tai-nghe-dich-thuat-pin-50-tieng-4996056.html",
+      "sentiment": "neutral",
+      "confidence": 0.8,
+      "reasoning": "The news article appears to be a product review of Soundcore R60i NC headphones, which does not directly relate to or discuss the legal framework outlined in the Law on Technology and AI Development. The article focuses on the features and specifications of the headphones, such as Bluetooth 6.1 and AI-powered translation support for over 100 languages. There is no apparent connection between the product review and the legal context, which suggests a neutral sentiment.",
+      "analysis_timestamp": "2025-12-23T20:47:08.389765",
+      "analysis_method": "llm",
+      "model_used": "llama3:latest"
+    },
+    {
+      "article_id": "vnexpress_technology_1766227478_1",
+      "title": "Robot hình người Trung Quốc tham gia sản xuất pin xe điện",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/robot-hinh-nguoi-trung-quoc-tham-gia-san-xuat-pin-xe-dien-4996231.html",
+      "sentiment": "neutral",
+      "confidence": 0.5,
+      "reasoning": "Rule-based analysis: 0 positive words, 0 negative words found",
+      "analysis_timestamp": "2025-12-23T20:47:12.961149",
+      "analysis_method": "rule_based_fallback",
+      "model_used": null
+    },
+    {
+      "article_id": "vnexpress_technology_1766227478_2",
+      "title": "Người dùng chi ba tỷ USD cho ứng dụng ChatGPT",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/nguoi-dung-chi-ba-ty-usd-cho-ung-dung-chatgpt-4995800.html",
+      "sentiment": "neutral",
+      "confidence": 0.5,
+      "reasoning": "Rule-based analysis: 0 positive words, 0 negative words found",
+      "analysis_timestamp": "2025-12-23T20:47:17.328510",
+      "analysis_method": "rule_based_fallback",
+      "model_used": null
+    },
+    {
+      "article_id": "vnexpress_technology_1766227478_3",
+      "title": "Nơi yên tĩnh nhất Trái Đất",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/noi-yen-tinh-nhat-trai-dat-4995615.html",
+      "sentiment": "neutral",
+      "confidence": 0.5,
+      "reasoning": "Rule-based analysis: 0 positive words, 0 negative words found",
+      "analysis_timestamp": "2025-12-23T20:47:22.020358",
+      "analysis_method": "rule_based_fallback",
+      "model_used": null
+    },
+    {
+      "article_id": "vnexpress_technology_1766227478_4",
+      "title": "Soundcore R60i NC - tai nghe dịch thuật, pin 50 tiếng",
+      "source": "VnExpress",
+      "date": "2025-12-20",
+      "link": "https://vnexpress.net/soundcore-r60i-nc-tai-nghe-dich-thuat-pin-50-tieng-4996056.html",
+      "sentiment": "neutral",
+      "confidence": 0.8,
+      "reasoning": "The news article does not explicitly discuss or relate to the legal document context. The article is focused on introducing a new product (Soundcore R60i NC) with AI translation capabilities, and its tone is informative rather than evaluative or critical. Although the product features AI technology, there is no direct connection made to the Vietnamese Law on Technology and AI Development. Therefore, I classify the sentiment as neutral, indicating that the article does not express a clear opinion or attitude towards the legal framework or policies mentioned.",
+      "analysis_timestamp": "2025-12-23T20:47:26.285739",
+      "analysis_method": "llm",
+      "model_used": "llama3:latest"
+    }
+  ],
+  "metadata": {
+    "agent": "sentiment_analysis_agent",
+    "model_used": "llama3:latest",
+    "confidence_threshold": 0.7,
+    "batch_size": 2,
+    "legal_context_available": true
+  }
+}

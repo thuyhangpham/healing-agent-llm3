@@ -1,0 +1,17 @@
+{
+  "css_selector_failure:opinion_search_agent:NoSuchElementException": {
+    "pattern_id": "css_selector_failure:opinion_search_agent:NoSuchElementException",
+    "error_type": "NoSuchElementException",
+    "frequency": 4,
+    "first_seen": "2025-12-21T21:28:31.470680",
+    "last_seen": "2025-12-21T21:28:31.470680",
+    "affected_agents": [
+      "opinion_search_agent"
+    ],
+    "common_context": {},
+    "suggested_fixes": [
+      "Update CSS selectors to match current page structure"
+    ],
+    "success_rate": 1.0
+  }
+}

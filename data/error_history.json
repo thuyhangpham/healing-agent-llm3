@@ -1,0 +1,54 @@
+[
+  {
+    "error_id": "0335f414d5c8",
+    "timestamp": "2025-12-21T21:28:31.470680",
+    "error_type": "NoSuchElementException",
+    "error_message": "No articles found with selector: article.wrong-class",
+    "agent_name": "opinion_search_agent",
+    "category": "css_selector_failure",
+    "severity": 2,
+    "repairable": true,
+    "confidence": 0.9,
+    "root_cause": "CSS selectors no longer match page elements",
+    "suggested_approach": "Update CSS selectors to match current page structure"
+  },
+  {
+    "error_id": "0335f414d5c8",
+    "timestamp": "2025-12-21T21:28:31.470680",
+    "error_type": "NoSuchElementException",
+    "error_message": "No articles found with selector: article.wrong-class",
+    "agent_name": "opinion_search_agent",
+    "category": "css_selector_failure",
+    "severity": 2,
+    "repairable": true,
+    "confidence": 0.9,
+    "root_cause": "Recurring pattern: css_selector_failure:opinion_search_agent:NoSuchElementException",
+    "suggested_approach": "Apply known fix pattern: Update CSS selectors to match current page structure"
+  },
+  {
+    "error_id": "0335f414d5c8",
+    "timestamp": "2025-12-21T21:28:31.470680",
+    "error_type": "NoSuchElementException",
+    "error_message": "No articles found with selector: article.wrong-class",
+    "agent_name": "opinion_search_agent",
+    "category": "css_selector_failure",
+    "severity": 2,
+    "repairable": true,
+    "confidence": 0.9,
+    "root_cause": "Recurring pattern: css_selector_failure:opinion_search_agent:NoSuchElementException",
+    "suggested_approach": "Apply known fix pattern: Update CSS selectors to match current page structure"
+  },
+  {
+    "error_id": "0335f414d5c8",
+    "timestamp": "2025-12-21T21:28:31.470680",
+    "error_type": "NoSuchElementException",
+    "error_message": "No articles found with selector: article.wrong-class",
+    "agent_name": "opinion_search_agent",
+    "category": "css_selector_failure",
+    "severity": 2,
+    "repairable": true,
+    "confidence": 0.9,
+    "root_cause": "Recurring pattern: css_selector_failure:opinion_search_agent:NoSuchElementException",
+    "suggested_approach": "Apply known fix pattern: Update CSS selectors to match current page structure"
+  }
+]

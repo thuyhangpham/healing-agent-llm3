@@ -1,0 +1,1 @@
+event_id,timestamp,error_id,error_type,agent_name,category,severity,success,time_to_repair,fix_applied,validation_passed,rollback_performed,backup_created,llm_response_time,patch_validation_time,hot_reload_time,fix_description

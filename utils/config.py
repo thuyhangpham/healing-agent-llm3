@@ -68,3 +68,22 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
+
+def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Load configuration from file or environment."""
+    if config_path and os.path.exists(config_path):
+        try:
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except ImportError:
+            # Fallback to JSON if YAML not available
+            import json
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load config from {config_path}: {e}")
+    
+    # Return settings as dict
+    return settings.dict() if hasattr(settings, 'dict') else settings.__dict__

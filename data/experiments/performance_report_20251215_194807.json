@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-12-15T19:48:07.673991",
+  "total_experiments": 5,
+  "healing_agent_performance": {
+    "total_experiments": 2,
+    "successful_experiments": 0,
+    "success_rate": 0.0,
+    "average_mttr": 0
+  },
+  "chaos_engine_statistics": {
+    "total_injections": 0,
+    "successful_injections": 0,
+    "injection_success_rate": 0,
+    "injection_breakdown": {
+      "css_selector_failure": 0,
+      "network_timeout": 0,
+      "encoding_error": 0,
+      "javascript_heavy_page": 0,
+      "rate_limiting": 0
+    },
+    "total_tests": 0,
+    "healing_triggered_count": 0,
+    "healing_success_count": 0,
+    "average_recovery_time": 0.0,
+    "last_injection": null,
+    "chaos_engine_status": "disabled"
+  },
+  "system_performance": {
+    "total_experiments": 6,
+    "success_rate": 0.0,
+    "average_mttr": 0,
+    "target_achievement": {
+      "mttr_target_met": true,
+      "success_rate_target_met": false
+    }
+  }
+}

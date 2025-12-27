@@ -1,109 +1,230 @@
-# Healing Configuration
-
 # Healing Agent Configuration
+# Configuration for self-healing system components
+
+# Healing Agent Settings
 healing_agent:
-  enabled: true
-  max_attempts: 3
-  timeout_seconds: 30
+  agent_id: "healing_agent"
+  auto_heal_enabled: true
+  max_healing_attempts: 3
+  mttr_target_seconds: 60
+  success_rate_target: 0.8
   backup_enabled: true
-  validation_enabled: true
   
-  # LLM Configuration for Code Generation
-  llm_config:
-    model: "llama3"
-    temperature: 0.1
-    max_tokens: 2000
-    timeout: 30
+  # Healing thresholds
+  max_error_frequency: 10  # errors per hour before throttling
+  healing_cooldown_seconds: 30  # minimum time between healing attempts
   
-  # Code Generation Prompts
-  prompts:
-    healing_prompt: |
-      You are an expert Python developer specializing in web scraping automation.
-      Analyze this error and generate a fix for the scraping code.
-      
-      ERROR DETAILS:
-      - Error Type: {error_type}
-      - Traceback: {traceback}
-      - Failed File: {file_path}
-      - HTML Snapshot: {html_snapshot}
-      
-      CURRENT CODE:
-      {current_code}
-      
-      REQUIREMENTS:
-      1. Fix the specific error (CSS selector, parsing logic, etc.)
-      2. Maintain existing functionality
-      3. Add error handling for similar issues
-      4. Return only the fixed Python code
-      5. Use robust selectors that are less likely to break
-      
-      Generate the complete fixed function or class:
+  # Error handling
+  critical_error_types:
+    - "authentication_error"
+    - "rate_limit_error"
+    - "network_error"
+  
+  # Logging and monitoring
+  log_level: "INFO"
+  metrics_enabled: true
+  audit_trail: true
 
-# Error Handler Configuration
-error_handler:
-  capture_html_snapshot: true
-  capture_traceback: true
-  max_error_context_size: 10000  # characters
+# LLM Client Configuration (Ollama)
+llm:
+  base_url: "http://localhost:11434"
+  model: "llama3"
+  temperature: 0.3
+  max_tokens: 4096
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
   
-  # Error Categories
-  error_categories:
-    network_errors:
-      - "ConnectionError"
-      - "TimeoutError"
-      - "HTTPError"
-    parsing_errors:
-      - "ValueError"
-      - "AttributeError"
-      - "KeyError"
-    structure_errors:
-      - "SelectorNotFound"
-      - "ElementMissing"
-      - "LayoutChanged"
-    access_errors:
-      - "PermissionError"
-      - "AuthenticationError"
-      - "RateLimitError"
-
-# Code Patcher Configuration
-code_patcher:
-  backup_extension: ".bak"
-  max_backup_files: 10
-  atomic_write: true
+  # Prompt optimization
+  use_context_window: true
+  include_code_snippets: true
+  include_error_history: true
   
-  # Hot Reload Configuration
-  hot_reload:
-    enabled: true
-    reload_delay: 1  # seconds
-    verify_after_reload: true
+  # Model fallbacks
+  fallback_models:
+    - "llama3"
+    - "llama3.1:8b"
+    - "codellama:13b"
+    - "mistral:7b"
 
-# Code Validator Configuration
-code_validator:
-  syntax_check: true
-  logic_check: true
-  test_cases_enabled: true
+# Error Detection Configuration
+error_detection:
+  similarity_threshold: 0.7
+  pattern_min_frequency: 3
+  html_diff_threshold: 0.8
+  max_history_size: 10000
   
-  # Validation Rules
-  validation_rules:
-    max_function_length: 100
-    max_complexity: 10
-    require_docstrings: true
+  # Pattern learning
+  learning_enabled: true
+  pattern_retention_days: 30
+  auto_categorization: true
+  
+  # HTML analysis
+  html_analysis_enabled: true
+  css_change_detection: true
+  structure_change_detection: true
+  
+  # Error classification
+  classification_confidence_threshold: 0.8
+  unknown_error_handling: "manual_review"
 
-# Metrics Configuration
+# Code Patching Configuration
+code_patching:
+  backup_enabled: true
+  validation_level: "basic_execution"  # syntax_only, import_check, basic_execution, full_test
+  auto_rollback: true
+  max_patch_size: 100000  # 100KB
+  test_timeout: 30
+  
+  # File operations
+  atomic_operations: true
+  backup_dir: "data/backups"
+  temp_dir: "data/temp"
+  
+  # Module reloading
+  hot_reload_enabled: true
+  dependency_tracking: true
+  reload_timeout: 10
+  
+  # Safety checks
+  syntax_validation: true
+  import_validation: true
+  basic_execution_test: true
+
+# Healing Metrics Configuration
 metrics:
-  collection_enabled: true
-  export_interval: 3600  # seconds
-  retention_days: 30
+  metrics_dir: "data/metrics"
+  export_dir: "data/exports"
+  mttr_periods: [1, 6, 24, 168]  # hours
+  success_rate_periods: [1, 6, 24, 168]
+  max_events_memory: 10000
+  auto_export_interval: 3600  # seconds
   
-  # Metrics to Track
-  tracked_metrics:
-    - "mttr"
-    - "success_rate"
-    - "error_types"
-    - "healing_attempts"
-    - "repair_durability"
+  # Performance targets
+  mttr_target_seconds: 60
+  success_rate_target: 0.8
+  availability_target: 0.95
   
-  # Export Configuration
-  export:
-    formats: ["json", "csv"]
-    directory: "data/metrics"
-    include_detailed_logs: true
+  # Data retention
+  event_retention_days: 90
+  calculation_retention_days: 365
+  export_retention_days: 30
+  
+  # Export settings
+  auto_export_enabled: true
+  export_formats: ["json", "csv"]
+  export_compression: true
+
+# Chaos Engineering Configuration
+chaos_engineering:
+  enabled: false  # Disabled by default for safety
+  test_schedule: "0 2 * * *"  # 2 AM daily (cron format)
+  max_concurrent_tests: 1
+  test_timeout: 300  # seconds
+  
+  # Test types
+  enabled_tests:
+    - "error_injection"
+    - "network_failure"
+    - "resource_exhaustion"
+  
+  # Safety limits
+  max_failure_rate: 0.1  # 10% of agents
+  recovery_timeout: 600  # seconds
+  rollback_on_failure: true
+  
+  # Test scenarios
+  error_injection:
+    types: ["runtime_error", "import_error", "timeout_error"]
+    probability: 0.05  # 5% chance per agent per test cycle
+  
+  network_failure:
+    types: ["connection_refused", "timeout", "dns_failure"]
+    duration_range: [10, 60]  # seconds
+  
+  resource_exhaustion:
+    types: ["memory", "cpu", "disk"]
+    threshold_factor: 0.8  # 80% of available resources
+
+# Integration Settings
+integration:
+  orchestrator:
+    enabled: true
+    heartbeat_interval: 30  # seconds
+    error_reporting: true
+    status_broadcast: true
+  
+  agent_registry:
+    auto_register: true
+    capabilities_broadcast: true
+    health_check_interval: 60
+  
+  global_state:
+    sync_enabled: true
+    sync_interval: 30
+    conflict_resolution: "last_writer_wins"
+
+# Security and Safety
+security:
+  # Code validation
+  code_validation_enabled: true
+  forbidden_imports:
+    - "os.system"
+    - "subprocess.call"
+    - "eval"
+    - "exec"
+    - "__import__"
+  
+  # Access control
+  healing_permission_required: false
+  audit_logging: true
+  sensitive_data_masking: true
+  
+  # Sandboxing
+  code_execution_sandbox: false  # Requires additional setup
+  resource_limits:
+    max_memory_mb: 512
+    max_cpu_percent: 50
+    max_execution_time: 30
+
+# Notification Settings
+notifications:
+  enabled: true
+  channels: ["log", "webhook"]
+  
+  # Alert thresholds
+  mttr_alert_threshold: 120  # seconds
+  success_rate_alert_threshold: 0.7
+  error_frequency_alert_threshold: 20  # per hour
+  
+  # Webhook configuration
+  webhook:
+    url: ""  # Configure as needed
+    timeout: 10
+    retry_attempts: 3
+  
+  # Email configuration (optional)
+  email:
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    recipients: []
+
+# Development and Debugging
+development:
+  debug_mode: false
+  verbose_logging: false
+  mock_llm_responses: false
+  disable_auto_healing: false
+  
+  # Testing
+  test_data_dir: "tests/data"
+  mock_error_scenarios: false
+  enable_test_endpoints: false
+  
+  # Performance monitoring
+  profiling_enabled: false
+  memory_tracking: false
+  execution_time_tracking: true
