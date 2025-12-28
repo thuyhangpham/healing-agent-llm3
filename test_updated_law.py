@@ -36,14 +36,14 @@ async def test_updated_law():
         print(f"Law search result: {result.get('status', 'unknown')}")
         
         if result.get('status') == 'success':
-            print(f"✅ Successfully extracted {result.get('total_results', 0)} legal documents")
+            print(f"Successfully extracted {result.get('total_results', 0)} legal documents")
             for i, doc in enumerate(result.get('results', [])):
                 print(f"  {i+1}. {doc.get('title', 'N/A')}")
                 print(f"      Link: {doc.get('link', 'N/A')}")
                 print(f"      Attachment: {doc.get('attachment_path', 'N/A')}")
         
     except Exception as e:
-        print(f"❌ Law agent error: {e}")
+        print(f"Law agent error: {e}")
         
     finally:
         await law_agent.shutdown()

@@ -1,6 +1,6 @@
 # ETL Sentiment System - Complete Workflow Documentation
 
-## 🎯 System Overview
+## System Overview
 
 The ETL Sentiment system is a multi-agent architecture designed for:
 - **Legal Document Collection** from VBPL (Vietnamese legal portal)
@@ -9,30 +9,9 @@ The ETL Sentiment system is a multi-agent architecture designed for:
 - **Sentiment Analysis** of collected content
 - **Self-Healing** for automated error detection and recovery
 
-## 🏗️ Architecture Components
-
-### Core System Components
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ETL SENTIMENT SYSTEM ARCHITECTURE                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│  │ Law Search    │  │ Opinion      │  │ PDF Analysis  │  │ Sentiment     │  │ Healing       │
-│  │ Agent        │  │ Search Agent │  │ Agent        │  │ Agent        │  │ Agent        │
-│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘
-│                                                         │
-└─────────────────────────────────────────────────────────────────┘
-│                                                         │
-│              ┌─────────────────────────────────────────────┐
-│              │        PRODUCTION RUNNER & ORCHESTRATOR      │
-│              └─────────────────────────────────────────────────────┘
-│                                                         │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Production Workflow
+## Production Workflow
 
 ### 1. System Initialization
 ```bash
@@ -57,30 +36,6 @@ Each agent runs continuously for the specified duration:
 - **Sentiment Analysis**: Analyzes collected text content
 - **Healing Agent**: Monitors system health and handles errors
 
-## 📊 Data Flow Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DATA FLOW ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│  │   VBPL      │  │   VnExpress   │  │   PDF Files   │  │   Text Data   │  │  Processed   │
-│  │   Sources    │  │   News       │  │   Documents   │  │   Content    │  │   Results    │
-│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘
-│                                                         │
-│              ┌─────────────────────────────────────────────┐
-│  │            SENTIMENT ANALYSIS ENGINE           │
-│  └─────────────────────────────────────────────────────┘
-│                                                         │
-│              ┌─────────────────────────────────────────────┐
-│  │              SELF-HEALING SYSTEM              │
-│  └─────────────────────────────────────────────────────┘
-│                                                         │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## 🔧 Configuration Management
 
 ### Agent Configuration (`config/agents.yaml`)
 ```yaml
@@ -137,7 +92,7 @@ agents:
     success_rate_target: 0.8
 ```
 
-## 📁 Data Storage Structure
+## Data Storage Structure
 
 ### Directory Layout
 ```
@@ -154,7 +109,7 @@ data/
 └── snapshots/           # System state snapshots
 ```
 
-## 🔄 Production Commands
+###  Production Commands
 
 ### Basic Production Run
 ```bash
@@ -182,95 +137,6 @@ python scripts/status.py
 # Export data for analysis
 python scripts/export_data.py
 ```
-
-## 🎯 Key Features
-
-### ✅ Real Web Scraping
-- **VBPL Integration**: Direct access to Vietnamese legal portal
-- **VnExpress Mining**: Public opinion extraction from news articles
-- **Rate Limiting**: Respectful crawling with configurable delays
-- **Error Handling**: Robust error recovery and retry mechanisms
-
-### ✅ Document Processing
-- **PDF Analysis**: Metadata extraction and content analysis
-- **Batch Processing**: Handle multiple documents efficiently
-- **Format Support**: PDF, text, and structured output
-
-### ✅ Sentiment Analysis
-- **Multi-language Support**: Vietnamese and English text processing
-- **Confidence Scoring**: Reliable sentiment classification
-- **Batch Analysis**: Process large volumes of text efficiently
-
-### ✅ Self-Healing System
-- **Automated Error Detection**: LLM-powered error analysis
-- **Intelligent Code Generation**: Context-aware fix generation
-- **Hot-Reload**: Production updates without system restart
-- **Performance Monitoring**: MTTR tracking and success rate metrics
-
-### ✅ Production Features
-- **Continuous Operation**: Long-running data collection
-- **Real-time Monitoring**: Live status updates and metrics
-- **Data Persistence**: JSON and text-based logging
-- **Graceful Shutdown**: Clean resource cleanup
-
-## 🚨 Error Handling & Recovery
-
-### Error Categories
-1. **Network Errors**: Connection timeouts, HTTP errors
-2. **Parsing Errors**: HTML structure changes, missing elements
-3. **Processing Errors**: File system issues, encoding problems
-4. **System Errors**: Resource exhaustion, memory issues
-
-### Recovery Strategies
-1. **Immediate Retry**: Automatic retry with exponential backoff
-2. **Fallback Mechanisms**: Alternative data sources
-3. **Error Context Preservation**: Detailed logging for analysis
-4. **Hot-Reload**: Code updates without system restart
-
-## 📈 Performance Metrics
-
-### Key Performance Indicators (KPIs)
-- **Data Collection Rate**: Documents/minute per agent
-- **Success Rate**: Percentage of successful operations
-- **Mean Time to Repair (MTTR)**: Average error recovery time
-- **System Availability**: Uptime and health status
-- **Error Rate**: Frequency and types of errors
-- **Resource Utilization**: CPU, memory, network usage
-
-### Monitoring Dashboard
-```bash
-# Real-time monitoring
-python scripts/status.py
-
-# Performance analysis
-python -c "
-import json
-from pathlib import Path
-results = list(Path('data/production').glob('production_results_*.json'))
-if results:
-    latest = max(results, key=lambda f: f.stat().st_mtime)
-    with open(latest, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        print(f'Success_rate: {data.get(\"success_rate\", 0):.1%}')
-        print(f'total_iterations: {data.get(\"total_iterations\", 0)}')
-"
-```
-
-## 🔒 Security & Compliance
-
-### Data Privacy
-- **Local Processing**: All data processed locally
-- **No External Transmissions**: No data sent to external services
-- **Configurable Retention**: User-defined data retention policies
-- **Error Logging**: Comprehensive error tracking without sensitive data
-
-### Rate Limiting Compliance
-- **Configurable Delays**: Respectful crawling intervals
-- **Request Throttling**: Built-in rate limit enforcement
-- **User-Agent Rotation**: Multiple user agent strings
-- **Respect robots.txt**: Honor website crawling policies
-
-## 🛠️ Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -346,7 +212,7 @@ utils/
 5. **Testing**: Write unit tests for all agent functionality
 6. **Documentation**: Maintain comprehensive documentation for all components
 
-## 🎯 Production Deployment
+## Production Deployment
 
 ### Environment Setup
 ```bash
@@ -375,7 +241,7 @@ python scripts/export_data.py --period week
 python scripts/run_production.py --duration 60 --agents healing_agent --cleanup
 ```
 
-## 📖 System Evolution
+## System Evolution
 
 ### Version History
 - **v1.0**: Basic agent framework
