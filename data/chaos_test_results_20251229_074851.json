@@ -1,0 +1,46 @@
+{
+  "test_success": false,
+  "test_timestamp": "2025-12-29T07:48:51.577543",
+  "timing": {
+    "total_test_time_seconds": 70.65422320365906,
+    "stabilization_time": 10,
+    "error_injection_time": 10.113452911376953,
+    "healing_detection_time": null,
+    "healing_completion_time": null,
+    "mttr_seconds": null
+  },
+  "healing_effectiveness": {
+    "selector_restored": false,
+    "healing_detected": false,
+    "healing_completed": false
+  },
+  "system_metrics": {},
+  "test_configuration": {
+    "stabilization_time": 10,
+    "observation_window": 60,
+    "quick_mode": false,
+    "verbose": false
+  },
+  "logs_sample": [
+    "Results: 0",
+    "3. Status: success",
+    "Query: N/A",
+    "Results: 0",
+    "",
+    "healing_agent:",
+    "Total iterations: 429",
+    "Successful: 429",
+    "Errors: 0",
+    "Timeouts: 0",
+    "Total runtime: 432.37s",
+    "1. Status: success",
+    "Query: N/A",
+    "Results: 0",
+    "2. Status: success",
+    "Query: N/A",
+    "Results: 0",
+    "3. Status: success",
+    "Query: N/A",
+    "Results: 0"
+  ]
+}

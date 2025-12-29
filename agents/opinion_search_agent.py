@@ -5,9 +5,13 @@ Specialized agent for collecting opinion articles from VnExpress with
 smart keyword rotation, cooldown logic, and resource-efficient crawling.
 """
 
+import sys
+import os
+# Add project root to sys.path so we can import 'utils'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 import json
-import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,7 +24,8 @@ class AutonomousOpinionSearchAgent:
     """Agent for searching and collecting opinion articles from VnExpress Digital section."""
     
     # Maximum pages to crawl per keyword (to focus on recent news and save resources)
-    MAX_PAGES_PER_KEYWORD = 5
+    # Reduced to 2 for Chaos Engineering Demo - only need recent news
+    MAX_PAGES_PER_KEYWORD = 2
     # Cooldown period: reset keyword to page 1 if last_updated > 6 hours ago
     COOLDOWN_HOURS = 6
     
@@ -39,6 +44,15 @@ class AutonomousOpinionSearchAgent:
         # State file for pagination tracking
         self.state_file = Path("data/production/crawl_state.json")
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # CHAOS DEMO: Reset state file on init to start fresh every run
+        if self.state_file.exists():
+            try:
+                self.state_file.unlink()
+                self.logger.info("🔄 CHAOS DEMO: Deleted crawl_state.json to start fresh")
+                print("🔄 CHAOS DEMO: Reset crawl state - starting from page 1")
+            except Exception as e:
+                self.logger.warning(f"Failed to delete crawl_state.json: {e}")
         
         # HEALING AGENT: EASILY MODIFIABLE SELECTORS AS CLASS ATTRIBUTES
         self.vnexpress_base_url = 'https://vnexpress.net/'
@@ -845,44 +859,50 @@ class AutonomousOpinionSearchAgent:
         
         self.logger.error(f"Opinion search error: {error_type} - {error_message}")
         
-        # HEALING AGENT: Write error to global file for chaos test
-        await self.write_error_to_global_file(error_type, error_message)
+        # Write error signal for healing agent (subprocess-based)
+        import traceback
+        traceback_str = ''.join(traceback.format_exc())
+        self.write_error_signal(error_type, error_message, traceback_str)
         
         # CRASH - let healing agent handle this
         raise Exception(f"Opinion search error: {error_type} - {error_message}")
     
-    async def write_error_to_global_file(self, error_type: str, error_message: str):
-        """Write error to global error file for healing agent monitoring"""
+    def write_error_signal(self, error_type: str, error_message: str, traceback_str: str = None):
+        """Write error signal JSON file for healing agent (subprocess-based architecture)"""
         try:
             from pathlib import Path
             import json
+            import traceback as tb
             
             # Get project root
             current_file = Path(__file__)
             project_root = current_file.parent.parent
-            error_file = project_root / "data" / "production" / "error_to_heal.txt"
+            error_signal_file = project_root / "data" / "production" / "error_signal.json"
             
             # Ensure directory exists
-            error_file.parent.mkdir(parents=True, exist_ok=True)
+            error_signal_file.parent.mkdir(parents=True, exist_ok=True)
             
             error_data = {
                 'timestamp': datetime.now().isoformat(),
                 'error_type': error_type,
                 'error_message': error_message,
                 'agent_name': self.name,
-                'function_name': 'search_vnexpress',
+                'function_name': 'search',
                 'file_path': str(__file__),
-                'selector_used': getattr(self, 'article_list_selector', 'unknown'),
-                'severity': 'critical'
+                'selector_used': getattr(self, 'search_result_selector', 'unknown'),
+                'severity': 'critical',
+                'traceback': traceback_str or ''.join(tb.format_exc())
             }
             
-            with open(error_file, 'w', encoding='utf-8') as f:
+            with open(error_signal_file, 'w', encoding='utf-8') as f:
                 json.dump(error_data, f, indent=2, ensure_ascii=False)
-                f.write("\nready_for_processing\n")
-            self.logger.info("Error reported to healing agent via global error file")
+            
+            self.logger.info(f"Error signal written to: {error_signal_file}")
+            print(f"\n🚨 ERROR SIGNAL CREATED: {error_signal_file}")
             
         except Exception as e:
-            self.logger.error(f"Failed to report error: {e}")
+            self.logger.error(f"Failed to write error signal: {e}")
+            print(f"❌ Failed to write error signal: {e}")
     
     async def shutdown(self):
         """Cleanup resources"""
@@ -894,3 +914,85 @@ class AutonomousOpinionSearchAgent:
 class NoSuchElementException(Exception):
     """Custom exception for element not found"""
     pass
+
+
+async def main():
+    """
+    Main entry point for one-shot opinion search agent process.
+    This function runs once, processes one keyword, then exits.
+    """
+    import sys
+    from pathlib import Path
+    
+    # Add project root to path
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    
+    # Load configuration
+    try:
+        from utils.config import load_config
+        config_file = project_root / "config" / "agents.yaml"
+        if config_file.exists():
+            full_config = load_config(str(config_file))
+            agent_config = full_config.get('agents', {}).get('opinion_search_agent', {})
+        else:
+            agent_config = {}
+    except Exception as e:
+        print(f"⚠️  Could not load config, using defaults: {e}")
+        agent_config = {}
+    
+    # Initialize agent
+    agent = AutonomousOpinionSearchAgent(agent_config)
+    
+    try:
+        # Initialize async components
+        await agent.initialize()
+        
+        # Run search once (processes one keyword, one page)
+        result = await agent.search()
+        
+        # Log result
+        if result.get('status') == 'success':
+            print(f"\n✅ Search completed successfully")
+            print(f"   New articles: {result.get('new_articles_count', 0)}")
+            print(f"   Keyword: {result.get('keyword', 'unknown')}")
+            print(f"   Page: {result.get('page_number', 'unknown')}")
+        elif result.get('status') == 'limit_reached':
+            print(f"\n⏸️  Page limit reached for keyword")
+            print(f"   Keyword: {result.get('keyword', 'unknown')}")
+        elif result.get('status') == 'no_keywords':
+            print(f"\n⚠️  No keywords available or all in cooldown")
+        else:
+            print(f"\n⚠️  Search returned: {result.get('status', 'unknown')}")
+        
+        # Cleanup
+        await agent.shutdown()
+        
+        # Exit successfully
+        sys.exit(0)
+        
+    except Exception as e:
+        # Write error signal and exit with error code
+        print(f"\n❌ ERROR in opinion search agent: {e}")
+        import traceback
+        traceback_str = ''.join(traceback.format_exc())
+        
+        # Write error signal for healing agent
+        agent.write_error_signal(
+            error_type=type(e).__name__,
+            error_message=str(e),
+            traceback_str=traceback_str
+        )
+        
+        # Cleanup
+        try:
+            await agent.shutdown()
+        except:
+            pass
+        
+        # Exit with error code
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

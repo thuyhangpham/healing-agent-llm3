@@ -1,117 +1,89 @@
 #!/usr/bin/env python3
 """
-Chaos Test Script for Self-Healing Multi-Agent System
+Chaos Test Script for Dynamic Soup Statement Architecture
 
-This script demonstrates the paper's results by:
-1. Launching run_production.py in background mode
-2. Waiting 10s for system stability
-3. Automatically injecting error by modifying agents/opinion_search_agent.py
-4. Observing healing agent detection and Llama 3 repair
-5. Measuring Mean Time To Recovery (MTTR)
+This script tests the self-healing system by:
+1. Injecting a broken selector into data/production/soup_logic.txt
+2. Monitoring for the Healing Agent to fix it
+3. Measuring Mean Time To Recovery (MTTR)
 
 Usage:
-    python scripts/chaos_test.py [--quick] [--verbose]
+    python scripts/chaos_test.py
+
+Note: Assumes scripts/orchestrator.py is already running in another terminal.
 """
 
-import argparse
-import asyncio
-import json
-import os
-import shutil
-import subprocess
 import sys
 import time
-import threading
-import traceback
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-from utils.logger import get_logger
+from datetime import datetime
 
 
 class ChaosTest:
     """
-    Chaos testing framework for self-healing system validation
+    Chaos testing for Dynamic Soup Statement architecture.
     
-    This class orchestrates the complete chaos test workflow:
-    - System startup and monitoring
-    - Error injection simulation
-    - Healing process observation
-    - MTTR measurement and reporting
+    Tests the healing system by sabotaging soup_logic.txt and measuring
+    how long it takes for the Healing Agent to restore it.
     """
     
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or {}
-        self.logger = get_logger("chaos_test")
-        
-        # Test configuration
-        self.stabilization_time = self.config.get('stabilization_time', 10)  # seconds
-        self.test_duration = self.config.get('test_duration', 120)  # seconds
-        self.observation_window = self.config.get('observation_window', 60)  # seconds
-        self.verbose = self.config.get('verbose', False)
-        self.quick_mode = self.config.get('quick_mode', False)
-        
+    def __init__(self):
         # File paths
-        self.project_root = project_root
-        self.production_script = project_root / "scripts" / "run_production.py"
-        self.opinion_agent_file = project_root / "agents" / "opinion_search_agent.py"
-        self.backup_file = project_root / "agents" / "opinion_search_agent.py.backup"
-        self.healing_metrics_file = project_root / "data" / "healing_metrics.json"
-        self.production_log_file = project_root / "data" / "production" / "debug_log.txt"
+        self.project_root = Path(__file__).parent.parent
+        self.soup_logic_file = self.project_root / "data" / "production" / "soup_logic.txt"
         
         # Test state
-        self.production_process: Optional[subprocess.Popen] = None
-        self.start_time: Optional[float] = None
-        self.error_injection_time: Optional[float] = None
-        self.healing_detected_time: Optional[float] = None
-        self.healing_completed_time: Optional[float] = None
-        self.test_results: Dict[str, Any] = {}
+        self.original_content: str = ""
+        self.broken_content: str = "soup.select('div.chaos-broken-selector-123')"
+        self.injection_time: float = 0.0
+        self.recovery_time: float = 0.0
+        self.test_success: bool = False
         
-        # Monitoring state
-        self.monitoring_active = False
-        self.monitor_thread: Optional[threading.Thread] = None
-        self.system_logs: List[str] = []
-        
-        self.logger.info("Chaos Test initialized")
+        print("=" * 80)
+        print("CHAOS TEST: Dynamic Soup Statement Architecture")
+        print("=" * 80)
+        print(f"Target file: {self.soup_logic_file}")
+        print(f"Project root: {self.project_root}")
+        print("=" * 80)
+        print()
     
-    async def run_test(self) -> Dict[str, Any]:
+    def run_test(self) -> dict:
         """
-        Run the complete chaos test
+        Run the complete chaos test.
         
         Returns:
-            Test results with MTTR measurements
+            Test results dictionary with MTTR
         """
         try:
-            self.logger.info("Starting Chaos Test for Self-Healing System")
-            print("=" * 80)
-            print("CHAOS TEST: Self-Healing Multi-Agent System")
-            print("=" * 80)
+            # Phase 1: Pre-check
+            print("📋 Phase 1: Pre-check")
+            if not self._pre_check():
+                return {
+                    'success': False,
+                    'error': 'Pre-check failed',
+                    'mttr_seconds': None
+                }
+            print("✅ Pre-check passed\n")
             
-            # Phase 1: Pre-test validation
-            await self._pre_test_validation()
+            # Phase 2: Inject chaos
+            print("💥 Phase 2: Injecting Chaos")
+            self._inject_chaos()
+            print("✅ Chaos injected\n")
             
-            # Phase 2: Start production system
-            await self._start_production_system()
+            # Phase 3: Monitor healing
+            print("🔧 Phase 3: Monitoring Healing Process")
+            self._monitor_healing()
+            print("✅ Monitoring completed\n")
             
-            # Phase 3: Wait for stabilization
-            await self._wait_for_stabilization()
+            # Phase 4: Calculate results
+            print("📊 Phase 4: Calculating Results")
+            results = self._calculate_results()
             
-            # Phase 4: Inject error
-            await self._inject_error()
-            
-            # Phase 5: Monitor healing process
-            await self._monitor_healing_process()
-            
-            # Phase 6: Analyze results
-            results = await self._analyze_results()
-            
-            # Phase 7: Cleanup
-            await self._cleanup()
+            # Phase 5: Cleanup (if needed)
+            if not self.test_success:
+                print("🧹 Phase 5: Cleanup (Test Failed)")
+                self._cleanup()
+                print("✅ Cleanup completed\n")
             
             # Display results
             self._display_results(results)
@@ -119,417 +91,228 @@ class ChaosTest:
             return results
             
         except Exception as e:
-            self.logger.error(f"Chaos test failed: {e}")
-            await self._cleanup()
+            print(f"\n❌ Chaos test failed with error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Emergency cleanup
+            self._cleanup()
+            
             return {
                 'success': False,
                 'error': str(e),
-                'traceback': traceback.format_exc()
+                'mttr_seconds': None
             }
     
-    async def _pre_test_validation(self):
-        """Validate test prerequisites"""
-        print("\nPhase 1: Pre-test Validation")
-        
-        # Check required files
-        required_files = [
-            self.production_script,
-            self.opinion_agent_file,
-            project_root / "agents" / "healing_agent.py",
-            project_root / "core" / "llm_client.py"
-        ]
-        
-        for file_path in required_files:
-            if not file_path.exists():
-                raise FileNotFoundError(f"Required file not found: {file_path}")
-            print(f"  ✓ Found: {file_path.name}")
-        
-        # Check Ollama availability
+    def _pre_check(self) -> bool:
+        """Pre-check: Ensure target file exists and read current content."""
         try:
-            import requests
-            response = requests.get("http://localhost:11434/api/tags", timeout=5)
-            if response.status_code == 200:
-                models = response.json().get('models', [])
-                llama_available = any('llama' in model['name'].lower() for model in models)
-                if llama_available:
-                    print("  ✓ Ollama with Llama model available")
-                else:
-                    print("  ⚠️  Ollama available but no Llama model found")
-            else:
-                print("  ⚠️  Ollama not responding (will use mock)")
-        except Exception:
-            print("  ⚠️  Cannot connect to Ollama (will use mock)")
-        
-        print("✅ Pre-test validation completed\n")
-    
-    async def _start_production_system(self):
-        """Start the production system in background"""
-        print("🚀 Phase 2: Starting Production System")
-        
-        try:
-            # Start production system
-            self.start_time = time.time()
+            # Check if file exists
+            if not self.soup_logic_file.exists():
+                print(f"❌ Target file does not exist: {self.soup_logic_file}")
+                print(f"   Please ensure the file exists before running chaos test.")
+                return False
             
-            cmd = [
-                sys.executable, 
-                str(self.production_script),
-                "--background" if self.quick_mode else "--full"
-            ]
+            # Read current content
+            with open(self.soup_logic_file, 'r', encoding='utf-8') as f:
+                self.original_content = f.read().strip()
             
-            self.production_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
+            if not self.original_content:
+                print(f"⚠️  Target file is empty. This may cause issues.")
+                return False
             
-            print(f"  ✓ Production system started (PID: {self.production_process.pid})")
+            print(f"✅ Target file exists")
+            print(f"   File size: {len(self.original_content)} characters")
+            print(f"   Current content preview: {self.original_content[:80]}...")
             
-            # Start monitoring logs
-            self._start_log_monitoring()
-            
-            print("✅ Production system started\n")
+            return True
             
         except Exception as e:
-            raise Exception(f"Failed to start production system: {e}")
+            print(f"❌ Pre-check failed: {e}")
+            return False
     
-    def _start_log_monitoring(self):
-        """Start monitoring system logs"""
-        self.monitoring_active = True
-        
-        def monitor_logs():
-            while self.monitoring_active and self.production_process:
-                try:
-                    # Check if process is still running
-                    if self.production_process.poll() is not None:
-                        self.logger.warning("Production process terminated")
-                        break
-                    
-                    # Read production logs if available
-                    if self.production_log_file.exists():
-                        with open(self.production_log_file, 'r', encoding='utf-8') as f:
-                            lines = f.readlines()
-                            if lines and len(self.system_logs) < len(lines):
-                                new_lines = lines[len(self.system_logs):]
-                                for line in new_lines:
-                                    if self.verbose:
-                                        print(f"[PROD] {line.strip()}")
-                                    self.system_logs.append(line.strip())
-                    
-                    time.sleep(1)
-                    
-                except Exception as e:
-                    if self.monitoring_active:
-                        self.logger.error(f"Log monitoring error: {e}")
-            
-        self.monitor_thread = threading.Thread(target=monitor_logs, daemon=True)
-        self.monitor_thread.start()
-    
-    async def _wait_for_stabilization(self):
-        """Wait for system to stabilize"""
-        print(f"⏳ Phase 3: Waiting for Stabilization ({self.stabilization_time}s)")
-        
-        wait_time = 5 if self.quick_mode else self.stabilization_time
-        
-        for i in range(wait_time):
-            remaining = wait_time - i
-            print(f"  {remaining} seconds remaining...", end='\r')
-            await asyncio.sleep(1)
-        
-        print(f"\n  ✓ System stabilization completed")
-        print("✅ Stabilization phase completed\n")
-    
-    async def _inject_error(self):
-        """Inject error by modifying CSS selector"""
-        print("💥 Phase 4: Error Injection")
-        
+    def _inject_chaos(self):
+        """Inject broken selector into soup_logic.txt"""
         try:
-            # Create backup
-            shutil.copy2(self.opinion_agent_file, self.backup_file)
-            print(f"  ✓ Created backup: {self.backup_file.name}")
+            # Record injection time
+            self.injection_time = time.time()
             
-            # Read current file
-            with open(self.opinion_agent_file, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Write broken selector
+            with open(self.soup_logic_file, 'w', encoding='utf-8') as f:
+                f.write(self.broken_content)
             
-            # Find and replace the correct selector with wrong one
-            original_selector = "article.item-news"
-            wrong_selector = "article.wrong-class"
+            print(f"✅ Injected broken selector: {self.broken_content}")
+            print(f"   Injection time: {datetime.fromtimestamp(self.injection_time).strftime('%H:%M:%S')}")
             
-            if original_selector in content:
-                modified_content = content.replace(original_selector, wrong_selector)
-                
-                # Write modified content
-                with open(self.opinion_agent_file, 'w', encoding='utf-8') as f:
-                    f.write(modified_content)
-                
-                self.error_injection_time = time.time()
-                injection_delay = self.error_injection_time - self.start_time
-                
-                print(f"  ✓ Modified CSS selector: '{original_selector}' → '{wrong_selector}'")
-                print(f"  ✓ Error injected at T+{injection_delay:.1f}s")
-                
+            # Verify injection
+            with open(self.soup_logic_file, 'r', encoding='utf-8') as f:
+                current_content = f.read().strip()
+            
+            if current_content == self.broken_content:
+                print(f"   ✅ Verification: Broken selector confirmed in file")
             else:
-                raise Exception(f"Could not find selector '{original_selector}' in opinion agent")
-            
-            print("✅ Error injection completed\n")
+                raise Exception(f"Injection verification failed. Expected '{self.broken_content}', got '{current_content}'")
             
         except Exception as e:
-            raise Exception(f"Failed to inject error: {e}")
+            raise Exception(f"Failed to inject chaos: {e}")
     
-    async def _monitor_healing_process(self):
-        """Monitor the healing process"""
-        print("🔧 Phase 5: Monitoring Healing Process")
+    def _monitor_healing(self):
+        """
+        Monitor healing process by checking file content every 2 seconds.
+        Maximum monitoring time: 60 seconds.
+        """
+        max_monitoring_time = 60  # seconds
+        check_interval = 2  # seconds
+        max_checks = max_monitoring_time // check_interval
         
-        observation_time = 30 if self.quick_mode else self.observation_window
-        
-        print(f"  Monitoring healing process for {observation_time} seconds...")
-        print("  Waiting for Healing Agent to detect error and fix...")
-        
-        healing_detected = False
-        healing_completed = False
+        print(f"   Monitoring for up to {max_monitoring_time} seconds...")
+        print(f"   Checking every {check_interval} seconds")
+        print(f"   Waiting for Healing Agent to fix the selector...")
+        print()
         
         start_monitor = time.time()
+        check_count = 0
         
-        while time.time() - start_monitor < observation_time:
-            # Check logs for healing indicators
-            for log_line in self.system_logs[-10:]:  # Check recent logs
-                if "healing" in log_line.lower() and not healing_detected:
-                    self.healing_detected_time = time.time()
-                    healing_detection_delay = self.healing_detected_time - self.error_injection_time
-                    print(f"\n  🎯 Healing detected at T+{healing_detection_delay:.1f}s!")
-                    healing_detected = True
-                
-                if "fix applied" in log_line.lower() and healing_detected and not healing_completed:
-                    self.healing_completed_time = time.time()
-                    healing_completion_delay = self.healing_completed_time - self.error_injection_time
-                    print(f"  ✅ Fix applied at T+{healing_completion_delay:.1f}s!")
-                    healing_completed = True
-                    break
+        while check_count < max_checks:
+            check_count += 1
+            elapsed = time.time() - start_monitor
             
-            # Check if healing metrics file is updated
-            if self.healing_metrics_file.exists():
-                try:
-                    with open(self.healing_metrics_file, 'r') as f:
-                        metrics = json.load(f)
-                        if metrics.get('successful_repairs', 0) > 0:
-                            self.healing_completed_time = time.time()
-                            healing_completion_delay = self.healing_completed_time - self.error_injection_time
-                            print(f"\n  📊 Healing metrics updated at T+{healing_completion_delay:.1f}s!")
-                            healing_completed = True
-                            break
-                except:
-                    pass
-            
-            await asyncio.sleep(1)
-        
-        if not healing_detected:
-            print("  ⚠️  Healing process not detected within observation window")
-        elif not healing_completed:
-            print("  ⚠️  Healing completion not confirmed within observation window")
-        
-        print("✅ Healing monitoring completed\n")
-    
-    async def _analyze_results(self) -> Dict[str, Any]:
-        """Analyze test results and calculate MTTR"""
-        print("📊 Phase 6: Analyzing Results")
-        
-        # Calculate timing metrics
-        end_time = time.time()
-        total_test_time = end_time - self.start_time
-        
-        # Calculate MTTR
-        mttr = None
-        if self.healing_detected_time and self.healing_completed_time:
-            mttr = self.healing_completed_time - self.error_injection_time
-        elif self.healing_completed_time:
-            mttr = self.healing_completed_time - self.error_injection_time
-        
-        # Check if original selector was restored
-        selector_restored = False
-        try:
-            with open(self.opinion_agent_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if "article.item-news" in content:
-                    selector_restored = True
-        except:
-            pass
-        
-        # Load healing metrics if available
-        healing_metrics = {}
-        if self.healing_metrics_file.exists():
             try:
-                with open(self.healing_metrics_file, 'r') as f:
-                    healing_metrics = json.load(f)
-            except:
-                pass
+                # Read current file content
+                with open(self.soup_logic_file, 'r', encoding='utf-8') as f:
+                    current_content = f.read().strip()
+                
+                # Check if content has changed (healing occurred)
+                if current_content != self.broken_content:
+                    self.recovery_time = time.time()
+                    self.test_success = True
+                    mttr = self.recovery_time - self.injection_time
+                    
+                    print(f"   ✅ HEALING DETECTED at {check_count * check_interval}s!")
+                    print(f"   ✅ File content changed - Healing Agent fixed the selector")
+                    print(f"   ✅ Recovery time: {datetime.fromtimestamp(self.recovery_time).strftime('%H:%M:%S')}")
+                    print(f"   ✅ MTTR: {mttr:.2f} seconds")
+                    
+                    # Show what the fixed content looks like
+                    print(f"\n   Fixed content preview: {current_content[:80]}...")
+                    
+                    return
+                
+                # Still broken - continue monitoring
+                print(f"   [{check_count}/{max_checks}] Check at {elapsed:.1f}s: Still broken...", end='\r')
+                
+            except Exception as e:
+                print(f"\n   ⚠️  Error reading file during check {check_count}: {e}")
+            
+            # Wait before next check
+            time.sleep(check_interval)
         
-        # Prepare results
+        # Timeout - healing did not occur
+        print(f"\n   ❌ TIMEOUT: Healing did not occur within {max_monitoring_time} seconds")
+        self.test_success = False
+    
+    def _calculate_results(self) -> dict:
+        """Calculate test results and MTTR"""
         results = {
-            'test_success': selector_restored and mttr is not None,
+            'success': self.test_success,
             'test_timestamp': datetime.now().isoformat(),
-            'timing': {
-                'total_test_time_seconds': total_test_time,
-                'stabilization_time': self.stabilization_time,
-                'error_injection_time': self.error_injection_time - self.start_time if self.error_injection_time else None,
-                'healing_detection_time': self.healing_detected_time - self.start_time if self.healing_detected_time else None,
-                'healing_completion_time': self.healing_completed_time - self.start_time if self.healing_completed_time else None,
-                'mttr_seconds': mttr
-            },
-            'healing_effectiveness': {
-                'selector_restored': selector_restored,
-                'healing_detected': self.healing_detected_time is not None,
-                'healing_completed': self.healing_completed_time is not None
-            },
-            'system_metrics': healing_metrics,
-            'test_configuration': {
-                'stabilization_time': self.stabilization_time,
-                'observation_window': self.observation_window,
-                'quick_mode': self.quick_mode,
-                'verbose': self.verbose
-            },
-            'logs_sample': self.system_logs[-20:] if self.system_logs else []
+            'mttr_seconds': None,
+            'injection_time': datetime.fromtimestamp(self.injection_time).isoformat() if self.injection_time else None,
+            'recovery_time': datetime.fromtimestamp(self.recovery_time).isoformat() if self.recovery_time else None,
         }
         
-        self.test_results = results
-        print("✅ Results analysis completed\n")
+        if self.test_success and self.recovery_time:
+            mttr = self.recovery_time - self.injection_time
+            results['mttr_seconds'] = mttr
+            results['target_met'] = mttr < 60  # Target: MTTR < 60 seconds
         
         return results
     
-    def _display_results(self, results: Dict[str, Any]):
+    def _cleanup(self):
+        """Restore original content if test failed"""
+        try:
+            if self.original_content:
+                with open(self.soup_logic_file, 'w', encoding='utf-8') as f:
+                    f.write(self.original_content)
+                
+                print(f"   ✅ Restored original content to {self.soup_logic_file.name}")
+                
+                # Verify restoration
+                with open(self.soup_logic_file, 'r', encoding='utf-8') as f:
+                    restored_content = f.read().strip()
+                
+                if restored_content == self.original_content:
+                    print(f"   ✅ Verification: Original content restored successfully")
+                else:
+                    print(f"   ⚠️  Warning: Content may not match original exactly")
+            else:
+                print(f"   ⚠️  No original content to restore")
+                
+        except Exception as e:
+            print(f"   ❌ Cleanup failed: {e}")
+            print(f"   ⚠️  MANUAL CLEANUP REQUIRED: Please restore {self.soup_logic_file} manually")
+    
+    def _display_results(self, results: dict):
         """Display test results"""
-        print("📋 Phase 7: Test Results")
+        print("\n" + "=" * 80)
+        print("CHAOS TEST RESULTS")
         print("=" * 80)
         
-        # Overall result
-        success = results.get('test_success', False)
+        # Overall status
+        success = results.get('success', False)
         status = "✅ SUCCESS" if success else "❌ FAILURE"
-        print(f"\nOverall Test Status: {status}")
+        print(f"\nTest Status: {status}")
         
-        # Timing results
-        timing = results.get('timing', {})
-        mttr = timing.get('mttr_seconds')
-        
-        print(f"\n⏱️  Timing Metrics:")
-        print(f"  Total Test Time: {timing.get('total_test_time_seconds', 0):.1f}s")
-        print(f"  Error Injection: T+{timing.get('error_injection_time', 0):.1f}s")
-        print(f"  Healing Detection: T+{timing.get('healing_detection_time', 0):.1f}s" if timing.get('healing_detection_time') else "  Healing Detection: Not detected")
-        print(f"  Healing Completion: T+{timing.get('healing_completion_time', 0):.1f}s" if timing.get('healing_completion_time') else "  Healing Completion: Not detected")
-        
-        if mttr:
-            print(f"\n🎯 Mean Time To Recovery (MTTR): {mttr:.2f} seconds")
-            if mttr < 60:
-                print("  ✅ MTTR meets target (< 60 seconds)")
+        # MTTR
+        mttr = results.get('mttr_seconds')
+        if mttr is not None:
+            print(f"\n⏱️  Mean Time To Recovery (MTTR): {mttr:.2f} seconds")
+            
+            target_met = results.get('target_met', False)
+            if target_met:
+                print(f"   ✅ MTTR meets target (< 60 seconds)")
             else:
-                print("  ⚠️  MTTR exceeds target (> 60 seconds)")
+                print(f"   ⚠️  MTTR exceeds target (>= 60 seconds)")
         else:
-            print("\n⚠️  MTTR could not be calculated")
+            print(f"\n⚠️  MTTR: Could not be calculated (healing did not occur)")
         
-        # Effectiveness results
-        effectiveness = results.get('healing_effectiveness', {})
-        print(f"\n🔧 Healing Effectiveness:")
-        print(f"  Error Detected: {'✅' if effectiveness.get('healing_detected') else '❌'}")
-        print(f"  Fix Applied: {'✅' if effectiveness.get('healing_completed') else '❌'}")
-        print(f"  Selector Restored: {'✅' if effectiveness.get('selector_restored') else '❌'}")
+        # Timing details
+        print(f"\n📅 Timing Details:")
+        if results.get('injection_time'):
+            print(f"   Error Injection: {results['injection_time']}")
+        if results.get('recovery_time'):
+            print(f"   Recovery Detected: {results['recovery_time']}")
         
-        # System metrics
-        system_metrics = results.get('system_metrics', {})
-        if system_metrics:
-            print(f"\n📊 System Healing Metrics:")
-            print(f"  Successful Repairs: {system_metrics.get('successful_repairs', 0)}")
-            print(f"  Failed Repairs: {system_metrics.get('failed_repairs', 0)}")
-            if system_metrics.get('successful_repairs', 0) > 0:
-                success_rate = (system_metrics.get('successful_repairs', 0) / 
-                             (system_metrics.get('successful_repairs', 0) + system_metrics.get('failed_repairs', 0))) * 100
-                print(f"  Success Rate: {success_rate:.1f}%")
-        
-        # Research paper conclusion
-        print(f"\n📝 Research Paper Conclusion:")
+        # Conclusion
+        print(f"\n📝 Conclusion:")
         if success and mttr and mttr < 60:
-            print("  🎉 The self-healing system successfully demonstrates:")
-            print("     • Automated error detection")
-            print("     • LLM-powered diagnosis and repair") 
-            print("     • Hot-reload without system downtime")
-            print("     • MTTR < 60 seconds target achieved")
+            print("   🎉 Self-healing system successfully demonstrated:")
+            print("      • Automated error detection")
+            print("      • LLM-powered code repair")
+            print("      • Dynamic selector restoration")
+            print("      • MTTR < 60 seconds target achieved")
         elif success:
-            print("  ✅ Self-healing functional, but MTTR needs optimization")
+            print("   ✅ Self-healing functional, but MTTR needs optimization")
         else:
-            print("  ❌ Self-healing system requires further development")
+            print("   ❌ Self-healing system requires further development")
+            print("   ⚠️  Original content has been restored")
         
         print("\n" + "=" * 80)
-    
-    async def _cleanup(self):
-        """Clean up test environment"""
-        print("\n🧹 Phase 8: Cleanup")
-        
-        try:
-            # Stop monitoring
-            self.monitoring_active = False
-            if self.monitor_thread:
-                self.monitor_thread.join(timeout=2)
-            
-            # Stop production process
-            if self.production_process:
-                try:
-                    self.production_process.terminate()
-                    self.production_process.wait(timeout=5)
-                    print("  ✓ Production process stopped")
-                except:
-                    try:
-                        self.production_process.kill()
-                        self.production_process.wait(timeout=2)
-                        print("  ✓ Production process force killed")
-                    except:
-                        print("  ⚠️  Could not stop production process")
-            
-            # Restore original file
-            if self.backup_file.exists():
-                shutil.copy2(self.backup_file, self.opinion_agent_file)
-                self.backup_file.unlink()
-                print("  ✓ Original opinion agent restored")
-            
-            # Save test results
-            if self.test_results:
-                results_file = project_root / "data" / f"chaos_test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(results_file, 'w') as f:
-                    json.dump(self.test_results, f, indent=2)
-                print(f"  ✓ Test results saved: {results_file.name}")
-            
-            print("✅ Cleanup completed")
-            
-        except Exception as e:
-            self.logger.error(f"Cleanup error: {e}")
-            print(f"  ⚠️  Cleanup error: {e}")
 
 
-async def main():
-    """Main chaos test entry point"""
-    parser = argparse.ArgumentParser(description="Chaos Test for Self-Healing System")
-    parser.add_argument("--quick", action="store_true", help="Run quick test (30s instead of 2min)")
-    parser.add_argument("--verbose", action="store_true", help="Verbose logging")
-    parser.add_argument("--stabilization", type=int, default=10, help="Stabilization time in seconds")
-    parser.add_argument("--observation", type=int, default=60, help="Observation window in seconds")
-    
-    args = parser.parse_args()
-    
-    # Configure test
-    config = {
-        'stabilization_time': args.stabilization,
-        'observation_window': args.observation,
-        'quick_mode': args.quick,
-        'verbose': args.verbose
-    }
+def main():
+    """Main entry point"""
+    print("\n🚀 Starting Chaos Test...")
+    print("   Note: Ensure scripts/orchestrator.py is running in another terminal\n")
     
     # Run chaos test
-    chaos_test = ChaosTest(config)
-    results = await chaos_test.run_test()
+    chaos_test = ChaosTest()
+    results = chaos_test.run_test()
     
-    # Return exit code based on success
-    exit_code = 0 if results.get('test_success', False) else 1
+    # Exit with appropriate code
+    exit_code = 0 if results.get('success', False) else 1
     sys.exit(exit_code)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

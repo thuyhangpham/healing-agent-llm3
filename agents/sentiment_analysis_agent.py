@@ -6,9 +6,13 @@ using LLM integration with Ollama (Llama 3). Reads processed opinion articles an
 legal PDFs, analyzes sentiment with legal context, and generates comprehensive reports.
 """
 
+import sys
+import os
+# Add project root to sys.path so we can import 'utils'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 import json
-import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -174,9 +178,10 @@ Analyze the article's tone, attitude, and implications regarding the legal frame
             }
     
     async def _load_opinion_articles(self) -> List[Dict[str, Any]]:
-        """Load opinion articles from JSON files."""
+        """Load opinion articles from JSON files with pre-processing filters."""
         try:
             articles = []
+            filtered_count = 0
             
             if not self.opinions_dir.exists():
                 self.logger.warning(f"Opinions directory not found: {self.opinions_dir}")
@@ -192,14 +197,52 @@ Analyze the article's tone, attitude, and implications regarding the legal frame
                         content = await f.read()
                         article = json.loads(content)
                         
-                        # Add file path for reference
+                        # PRE-PROCESSING FILTER: Anti-Spam Check
+                        article_link = article.get('link', '')
+                        if not article_link:
+                            self.logger.debug(f"Skipping article {file_path.name}: No link field")
+                            filtered_count += 1
+                            continue
+                        
+                        # Filter out ads and external links
+                        if 'eclick.vn' in article_link:
+                            self.logger.info(f"⏭️  Skipping Ad/External Link: {article_link[:80]}...")
+                            filtered_count += 1
+                            continue
+                        
+                        if 'vnexpress.net' not in article_link:
+                            self.logger.info(f"⏭️  Skipping Ad/External Link: {article_link[:80]}...")
+                            filtered_count += 1
+                            continue
+                        
+                        # PRE-PROCESSING FILTER: Relevance Check
+                        # Get keyword from metadata (query field or matched_keyword)
+                        keyword = article.get('query') or article.get('matched_keyword') or article.get('matched_keywords', [])
+                        
+                        # Handle list of keywords
+                        if isinstance(keyword, list):
+                            keyword = keyword[0] if keyword else None
+                        
+                        if keyword:
+                            keyword_lower = keyword.lower()
+                            title = article.get('title', '').lower()
+                            sapo = article.get('sapo', '').lower()
+                            
+                            # Check if keyword appears in title or sapo
+                            if keyword_lower not in title and keyword_lower not in sapo:
+                                self.logger.info(f"⏭️  Skipping Irrelevant Article: '{keyword}' not in title/sapo")
+                                self.logger.debug(f"   Title: {article.get('title', '')[:60]}...")
+                                filtered_count += 1
+                                continue
+                        
+                        # Article passed all filters - add it
                         article['file_path'] = str(file_path)
                         articles.append(article)
                         
                 except Exception as e:
                     self.logger.error(f"Failed to load article from {file_path}: {e}")
             
-            self.logger.info(f"Successfully loaded {len(articles)} opinion articles")
+            self.logger.info(f"✅ Successfully loaded {len(articles)} opinion articles (filtered {filtered_count} articles)")
             return articles
             
         except Exception as e:

@@ -308,9 +308,12 @@ test_settings.py
 
 
 
-docs/stories
-.bmad-core
-.bmad-infrastructure-devops
-.cursor
+# Folders
+/docs/stories/
+/.bmad-core/
+/.bmad-infrastructure-devops/
+/.cursor/
+
+# Files
 opencode.jsonc
 AGENTS.md
