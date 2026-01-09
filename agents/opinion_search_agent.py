@@ -54,18 +54,15 @@ class AutonomousOpinionSearchAgent:
             except Exception as e:
                 self.logger.warning(f"Failed to delete crawl_state.json: {e}")
         
-        # HEALING AGENT: EASILY MODIFIABLE SELECTORS AS CLASS ATTRIBUTES
+        # DYNAMIC SOUP STATEMENT ARCHITECTURE: Selectors loaded from soup_logic.txt
         self.vnexpress_base_url = 'https://vnexpress.net/'
         self.vnexpress_tech_url = 'https://vnexpress.net/so-hoa'  # Digital section
         self.vnexpress_search_url = 'https://timkiem.vnexpress.net/'  # Search page
-        self.article_list_selector = 'article.item-news'  # CORRECT: This is what we found works
-        self.title_selector = 'a'  # Direct links work
-        self.sapo_selector = 'p'  # Paragraph elements near articles
-        self.date_selector = '.date, time'  # Date elements
         
-        # SEARCH PAGE SELECTORS (different from homepage)
-        self.search_input_selector = 'input[name="q"], input[type="search"], #search-input'  # Search input field
-        self.search_result_selector = '.item-news, .list_news .item, article, .news-item'  # Search result items
+        # Soup logic file path (Dynamic Soup Statement architecture)
+        self.soup_logic_file = Path("data/production/soup_logic.txt")
+        
+        # Fallback selectors for extraction (not for finding articles - that's dynamic)
         self.search_title_selector = 'h3 a, .title-news a, .title a, h2 a'  # Title links in search results
         self.search_sapo_selector = '.description, .sapo, .lead, p.description'  # Description/sapo in search results
         self.search_date_selector = '.date, time, .time'  # Date in search results
@@ -79,7 +76,93 @@ class AutonomousOpinionSearchAgent:
         # Processed URLs cache (loaded once per search)
         self.processed_urls: Set[str] = set()
         
-        self.logger.info("Opinion Search Agent initialized with keyword rotation")
+        self.logger.info("Opinion Search Agent initialized with keyword rotation and Dynamic Soup Statement architecture")
+    
+    def _setup_driver(self):
+        """
+        Create and configure Chrome WebDriver with anti-detection options.
+        This makes Selenium stealthy to avoid bot detection.
+        
+        Returns:
+            webdriver.Chrome: Configured Chrome driver instance
+        """
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        
+        chrome_options = Options()
+        
+        # Basic headless options
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        
+        # CRITICAL: Anti-detection options
+        # Hide automation indicators
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        
+        # Set realistic User-Agent (standard Chrome on Windows 10)
+        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        # Experimental options to hide automation
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # Additional stealth options
+        chrome_options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+        chrome_options.add_argument('--disable-site-isolation-trials')
+        
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        # Execute script to remove webdriver property (additional stealth)
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': '''
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                })
+            '''
+        })
+        
+        return driver
+    
+    def _load_logic(self) -> str:
+        """
+        Load dynamic soup selector logic from data/production/soup_logic.txt.
+        
+        Returns:
+            String containing Python code to execute (e.g., "soup.select('article.item-news')")
+            
+        Raises:
+            Exception: If soup_logic.txt doesn't exist or is empty
+        """
+        try:
+            # Ensure directory exists
+            self.soup_logic_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            if not self.soup_logic_file.exists():
+                # Create default if missing
+                default_logic = "soup.select('article.item-news')"
+                with open(self.soup_logic_file, 'w', encoding='utf-8') as f:
+                    f.write(default_logic)
+                self.logger.warning(f"soup_logic.txt not found, created default: {default_logic}")
+                print(f"⚠️  Created default soup_logic.txt: {default_logic}")
+                return default_logic
+            
+            # Read logic from file
+            with open(self.soup_logic_file, 'r', encoding='utf-8') as f:
+                logic_str = f.read().strip()
+            
+            if not logic_str:
+                raise Exception(f"soup_logic.txt is empty")
+            
+            self.logger.info(f"Loaded dynamic soup logic: {logic_str}")
+            print(f"📄 Loaded soup logic: {logic_str}")
+            return logic_str
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load soup logic: {e}")
+            raise Exception(f"Failed to load soup logic from {self.soup_logic_file}: {e}")
     
     def _load_crawl_state(self) -> Dict[str, Dict[str, Any]]:
         """Load crawl state from file"""
@@ -328,40 +411,41 @@ class AutonomousOpinionSearchAgent:
         
         try:
             # Try Selenium first for JavaScript rendering and scrolling
-            from selenium import webdriver
             from selenium.webdriver.common.by import By
             from selenium.webdriver.support.ui import WebDriverWait
             from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.chrome.options import Options
-            from selenium.webdriver.chrome.service import Service
             
             print(f"\n🌐 DEBUG: Using Selenium for JavaScript rendering and scrolling...")
             
-            chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--window-size=1920,1080')
-            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-            
-            driver = webdriver.Chrome(options=chrome_options)
+            # Use stealth driver setup
+            driver = self._setup_driver()
             
             try:
+                # Navigate to search URL
                 driver.get(search_url)
                 
-                # Wait for page to load
-                print(f"   ⏳ Waiting for page to load...")
-                time.sleep(2)
+                # Wait for body element to be present (critical for page load detection)
+                print(f"   ⏳ Waiting for page to load (max 15s)...")
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
                 
-                # Scroll to trigger lazy loading and get more results (20-30 items)
+                # Additional wait to ensure body has content (not just empty tag)
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.find_element(By.TAG_NAME, "body").text.strip() != "" or len(d.page_source) > 1000
+                )
+                
+                # Wait for JavaScript to finish executing
+                time.sleep(3)
+                
+                # Scroll to load lazy-loaded content
                 print(f"   📜 Scrolling to load more results...")
-                for scroll_attempt in range(3):  # Scroll 3 times to load more content
+                for scroll_attempt in range(3):
                     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    time.sleep(3)  # Wait for lazy loading
+                    time.sleep(2)
                     print(f"      Scroll {scroll_attempt + 1}/3 completed")
                 
-                # Get page source after scrolling
+                # Get HTML after scrolling
                 html_content = driver.page_source
                 print(f"   ✅ Page loaded and scrolled, HTML length: {len(html_content)} characters")
                 
@@ -384,6 +468,14 @@ class AutonomousOpinionSearchAgent:
                 raise Exception(f"HTTP {response.status}: Failed to access VnExpress search page")
             html_content = await response.text()
         
+        # SAFETY CHECK: Detect blocked pages BEFORE parsing/evaluating selectors
+        # If HTML is too short, this is NOT a selector issue - it's a blocked IP or network issue
+        if len(html_content) < 1000:
+            error_msg = f"Page load failed! HTML is too short ({len(html_content)} chars). This indicates anti-bot detection triggered or page failed to load - NOT a selector issue."
+            self.logger.error(error_msg)
+            print(f"\n🚨 {error_msg}")
+            raise ConnectionError("Anti-bot detection triggered or page failed to load. HTML length: {} chars".format(len(html_content)))
+        
         # Parse HTML
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -391,32 +483,42 @@ class AutonomousOpinionSearchAgent:
         print(f"\n📄 DEBUG: HTML structure check")
         print(f"   HTML length: {len(html_content)} characters")
         
-        # Try multiple selectors for search results (search page structure is different)
-        selectors_to_try = [
-            self.search_result_selector,
-            '.item-news',
-            '.list_news .item',
-            'article',
-            '.news-item',
-            '.item_news',
-            '.item-news-full',
-            '.list_news li'
-        ]
+        # DYNAMIC SOUP STATEMENT ARCHITECTURE: Load and execute logic from soup_logic.txt
+        logic_str = None
+        article_elements = []
         
-        for selector in selectors_to_try:
-            article_elements = soup.select(selector)
-            if article_elements:
-                print(f"   ✅ Found {len(article_elements)} articles using selector: {selector}")
-                break
-            else:
-                print(f"   ❌ No articles found with selector: {selector}")
+        try:
+            logic_str = self._load_logic()
+            print(f"   🔧 Executing dynamic logic: {logic_str}")
+            
+            # Execute the logic string with soup in scope
+            # The logic should be something like: soup.select('article.item-news')
+            article_elements = eval(logic_str, {'soup': soup, '__builtins__': __builtins__})
+            
+            # Ensure result is a list
+            if not isinstance(article_elements, list):
+                article_elements = list(article_elements) if article_elements else []
+            
+            print(f"   ✅ Executed dynamic logic, found {len(article_elements)} article elements")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to execute dynamic soup logic: {e}")
+            print(f"   ❌ ERROR executing dynamic logic: {e}")
+            # Capture HTML snapshot for healing agent
+            html_snapshot = html_content[:5000] if len(html_content) > 5000 else html_content
+            logic_display = logic_str if logic_str else 'unknown'
+            error_msg = f"Failed to execute dynamic soup logic '{logic_display}': {e}"
+            raise Exception(error_msg)
         
-        # Check if we reached end of results (no articles found)
-        if not article_elements:
-            print(f"\n⚠️  DEBUG: No articles found on page {page_num} - End of results reached")
-            # Reset to page 1 for future checks
-            self._update_keyword_state(keyword, 1, 'completed')
-            raise Exception(f"No articles found on page {page_num} - End of results")
+        # FAIL FAST: If no articles found, raise exception to trigger healing
+        if not article_elements or len(article_elements) == 0:
+            logic_display = logic_str if logic_str else 'unknown'
+            print(f"\n🚨 FAIL FAST: No articles found using dynamic logic: {logic_display}")
+            print(f"   This indicates a broken selector - triggering healing agent...")
+            # Capture HTML snapshot for healing agent (first 5000 chars)
+            html_snapshot = html_content[:5000] if len(html_content) > 5000 else html_content
+            error_msg = f"No articles found using dynamic logic '{logic_display}'. HTML length: {len(html_content)} chars"
+            raise Exception(error_msg)
         
         print(f"\n📊 DEBUG: Found {len(article_elements)} raw article elements")
         print(f"   Processing ALL articles...")
@@ -440,6 +542,26 @@ class AutonomousOpinionSearchAgent:
                     skipped_count += 1
                     skipped_reasons['no_url'] = skipped_reasons.get('no_url', 0) + 1
                     continue
+                
+                # --- QUALITY FILTER: Strict URL filtering to exclude ads and irrelevant links ---
+                article_url_lower = article_url.lower()
+                
+                # Blacklist: Skip ads, tracking links, and promotional content
+                # Check for: eclick, click, ads, promotion, video
+                blacklist_keywords = ['eclick', 'click', 'ads', 'promotion', 'video']
+                is_ad = any(keyword in article_url_lower for keyword in blacklist_keywords)
+                
+                # Whitelist: Must be a VnExpress article URL ending with .html
+                is_article = 'vnexpress.net' in article_url_lower and article_url_lower.endswith('.html')
+                
+                if is_ad or not is_article:
+                    skip_reason = 'ad' if is_ad else 'not_article'
+                    print(f"   ⏭️  SKIP: Ignored non-article/ad link: {article_url[:80]}...")
+                    self.logger.info(f"⏭️ SKIP: Ignored non-article/ad link: {article_url} (reason: {skip_reason})")
+                    skipped_count += 1
+                    skipped_reasons[skip_reason] = skipped_reasons.get(skip_reason, 0) + 1
+                    continue
+                # --------------------------------------------------------------------------------
                 
                 # Check for duplicate
                 if article_url in self.processed_urls:
@@ -793,11 +915,18 @@ class AutonomousOpinionSearchAgent:
             self.logger.error(f"Search failed: {e}")
             
             # HEALING AGENT: Report error before crashing
+            # Try to load current soup logic for error context
+            try:
+                current_logic = self._load_logic()
+            except:
+                current_logic = 'unknown'
+            
             error_context = {
                 'error_type': type(e).__name__,
                 'error_message': str(e),
                 'function': 'search',
-                'selector_used': getattr(self, 'search_result_selector', 'unknown')
+                'selector_used': current_logic,  # Dynamic soup logic from soup_logic.txt
+                'soup_logic_file': str(self.soup_logic_file)
             }
             
             # This will write error to global file and then crash
@@ -829,28 +958,23 @@ class AutonomousOpinionSearchAgent:
         return ['vnexpress']
     
     def get_selectors(self) -> Dict[str, str]:
-        """HEALING AGENT: Get all selectors"""
-        return {
-            'article_list_selector': self.article_list_selector,
-            'title_selector': self.title_selector,
-            'sapo_selector': self.sapo_selector,
-            'date_selector': self.date_selector,
-            'vnexpress_base_url': self.vnexpress_base_url,
-            'vnexpress_tech_url': self.vnexpress_tech_url
-        }
-    
-    def update_selectors(self, new_selectors: Dict[str, str]):
-        """HEALING AGENT: Update selectors"""
+        """Get current selectors (for compatibility - now uses dynamic logic)"""
         try:
-            for key, value in new_selectors.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-                    self.logger.info(f"Updated selector {key} to: {value}")
-                else:
-                    self.logger.warning(f"Unknown selector key: {key}")
+            logic_str = self._load_logic()
+            return {
+                'dynamic_soup_logic': logic_str,
+                'vnexpress_base_url': self.vnexpress_base_url,
+                'vnexpress_tech_url': self.vnexpress_tech_url,
+                'soup_logic_file': str(self.soup_logic_file)
+            }
         except Exception as e:
-            self.logger.error(f"Failed to update selectors: {e}")
-            raise e
+            self.logger.warning(f"Failed to load logic for get_selectors: {e}")
+            return {
+                'dynamic_soup_logic': 'unknown',
+                'vnexpress_base_url': self.vnexpress_base_url,
+                'vnexpress_tech_url': self.vnexpress_tech_url,
+                'soup_logic_file': str(self.soup_logic_file)
+            }
     
     async def handle_error(self, error_context: Dict[str, Any]) -> Dict[str, Any]:
         """Handle errors during search operations - NO FALLBACKS"""
@@ -882,6 +1006,12 @@ class AutonomousOpinionSearchAgent:
             # Ensure directory exists
             error_signal_file.parent.mkdir(parents=True, exist_ok=True)
             
+            # Try to load current soup logic for error signal
+            try:
+                current_logic = self._load_logic()
+            except:
+                current_logic = 'unknown'
+            
             error_data = {
                 'timestamp': datetime.now().isoformat(),
                 'error_type': error_type,
@@ -889,7 +1019,8 @@ class AutonomousOpinionSearchAgent:
                 'agent_name': self.name,
                 'function_name': 'search',
                 'file_path': str(__file__),
-                'selector_used': getattr(self, 'search_result_selector', 'unknown'),
+                'selector_used': current_logic,  # Dynamic soup logic from soup_logic.txt
+                'soup_logic_file': str(self.soup_logic_file),
                 'severity': 'critical',
                 'traceback': traceback_str or ''.join(tb.format_exc())
             }

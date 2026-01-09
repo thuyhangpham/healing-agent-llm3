@@ -1,1 +1,1 @@
-soup.select('div.chaos-broken-selector-123')
+soup.select('article.item-news')

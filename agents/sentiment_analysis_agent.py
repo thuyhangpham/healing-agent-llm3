@@ -1,9 +1,11 @@
 """
 Sentiment Analysis Agent
 
-Specialized agent for performing sentiment analysis on news articles and legal documents
-using LLM integration with Ollama (Llama 3). Reads processed opinion articles and 
-legal PDFs, analyzes sentiment with legal context, and generates comprehensive reports.
+Analyzes sentiment of opinion articles in the context of legal documents.
+Strictly follows the architecture diagram:
+- TARGET: Opinion articles from data/production/opinions/*.json
+- CONTEXT: Legal laws from data/production/laws/*.json (most recent)
+- MODEL: LLMClient (Llama 3 via Ollama)
 """
 
 import sys
@@ -13,31 +15,29 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
 import json
+import csv
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-import aiofiles
+from typing import Dict, Any, List, Optional
 
 from utils.logger import get_logger
-from utils.config import settings
 
 try:
     from core.llm_client import LLMClient
 except ImportError:
-    # Fallback for development
     LLMClient = None
 
 
 class SentimentAnalysisAgent:
     """
-    Agent for analyzing sentiment of news articles with legal document context.
+    Agent for analyzing sentiment of opinion articles with legal document context.
     
-    This agent:
-    - Reads opinion articles from data/production/opinions/*.json
-    - Reads legal documents from data/production/pdfs/processed/*.txt
-    - Uses LLM (Llama 3) to analyze sentiment with legal context
-    - Generates comprehensive sentiment reports
+    Architecture:
+    - TARGET: Reads opinion articles from data/production/opinions/*.json
+    - CONTEXT: Reads legal laws from data/production/laws/*.json (most recent)
+    - MODEL: Uses LLMClient (Llama 3 via Ollama)
+    - OUTPUT: Updates opinion JSON files and generates CSV summary report
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -46,75 +46,50 @@ class SentimentAnalysisAgent:
         self.name = "sentiment_analysis_agent"
         self.logger = get_logger(self.name)
         
-        # Agent-specific configuration
+        # Directories
         self.opinions_dir = Path("data/production/opinions")
-        self.legal_docs_dir = Path("data/production/pdfs/processed")
-        self.output_dir = Path("data/production")
-        self.output_file = self.output_dir / "sentiment_report.json"
+        self.laws_dir = Path("data/production/laws")
+        self.reports_dir = Path("data/reports")
+        
+        # Output file
+        self.summary_csv = self.reports_dir / "sentiment_summary.csv"
+        
+        # Ensure directories exist
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
         
         # LLM configuration
         self.llm_client: Optional[LLMClient] = None
         self.model_name = self.config.get('model', 'llama3:latest')
         self.temperature = self.config.get('temperature', 0.3)
         self.max_tokens = self.config.get('max_tokens', 2048)
-        self.confidence_threshold = self.config.get('confidence_threshold', 0.7)
-        self.batch_size = self.config.get('batch_size', 5)
         
-        # Sentiment analysis prompt template
-        self.sentiment_prompt = """You are an expert sentiment analyst specializing in legal and policy analysis. 
-
-TASK: Analyze the sentiment of the following news article regarding the provided legal document context.
-
-LEGAL DOCUMENT CONTEXT:
-{legal_context}
-
-NEWS ARTICLE:
-Title: {title}
-Summary: {sapo}
-Full Content: {content}
-
-ANALYSIS REQUIREMENTS:
-1. Read and understand the legal document context
-2. Analyze how the news article relates to or discusses the legal context
-3. Classify the sentiment as one of: Positive, Negative, or Neutral
-4. Provide a confidence score between 0.0 and 1.0
-5. Provide brief reasoning explaining your analysis
-
-RESPONSE FORMAT (JSON):
-{{
-    "sentiment": "positive|negative|neutral",
-    "confidence": 0.0-1.0,
-    "reasoning": "Brief explanation of why this sentiment was chosen, considering the legal context"
-}}
-
-Analyze the article's tone, attitude, and implications regarding the legal framework or policies mentioned."""
-
+        # Sentiment labels
+        self.sentiment_labels = ['POSITIVE', 'NEGATIVE', 'NEUTRAL']
+        
         self.logger.info("Sentiment Analysis Agent initialized")
     
     async def initialize(self) -> bool:
         """Initialize sentiment analysis agent."""
         try:
-            self.logger.info("Performing sentiment analysis agent initialization")
-            
-            # Create output directory if it doesn't exist
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info("Initializing sentiment analysis agent...")
             
             # Check if input directories exist
             if not self.opinions_dir.exists():
                 self.logger.warning(f"Opinions directory does not exist: {self.opinions_dir}")
+                self.opinions_dir.mkdir(parents=True, exist_ok=True)
             
-            if not self.legal_docs_dir.exists():
-                self.logger.warning(f"Legal documents directory does not exist: {self.legal_docs_dir}")
-                self.legal_docs_dir.mkdir(parents=True, exist_ok=True)
+            if not self.laws_dir.exists():
+                self.logger.warning(f"Laws directory does not exist: {self.laws_dir}")
+                self.laws_dir.mkdir(parents=True, exist_ok=True)
             
-            # Initialize LLM client if available
+            # Initialize LLM client
             if LLMClient is not None:
                 llm_config = {
-                    'base_url': settings.ollama_base_url,
+                    'base_url': self.config.get('ollama_base_url', 'http://localhost:11434'),
                     'model': self.model_name,
                     'temperature': self.temperature,
                     'max_tokens': self.max_tokens,
-                    'timeout': settings.ollama_timeout
+                    'timeout': self.config.get('timeout', 60)
                 }
                 self.llm_client = LLMClient(llm_config)
                 
@@ -122,6 +97,9 @@ Analyze the article's tone, attitude, and implications regarding the legal frame
                     self.logger.info(f"LLM client initialized with model: {self.model_name}")
                 else:
                     self.logger.error("Failed to initialize LLM client")
+                    return False
+            else:
+                self.logger.warning("LLMClient not available - sentiment analysis will use fallback")
             
             self.logger.info("Sentiment analysis agent initialization complete")
             return True
@@ -130,539 +108,467 @@ Analyze the article's tone, attitude, and implications regarding the legal frame
             self.logger.error(f"Failed to initialize sentiment analysis agent: {e}")
             return False
     
-    async def analyze_sentiment(self, task_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Main sentiment analysis method."""
+    async def analyze_sentiment(self) -> Dict[str, Any]:
+        """
+        Main sentiment analysis method.
+        
+        Returns:
+            Dictionary with analysis results and summary
+        """
         try:
             self.logger.info("Starting sentiment analysis task")
             
+            # Load most recent law for context
+            law_context = await self._load_most_recent_law()
+            if not law_context:
+                self.logger.warning("No law context found - proceeding without context")
+                law_summary = "No legal context available"
+            else:
+                law_summary = law_context.get('summary', law_context.get('title', 'Legal document'))
+            
             # Load opinion articles
-            opinion_articles = await self._load_opinion_articles()
-            if not opinion_articles:
+            opinion_files = list(self.opinions_dir.glob("*.json"))
+            if not opinion_files:
+                self.logger.warning("No opinion articles found")
                 return {
                     'success': False,
-                    'error': 'No opinion articles found to analyze',
-                    'total_articles': 0,
-                    'summary': {'positive': 0, 'negative': 0, 'neutral': 0}
+                    'error': 'No opinion articles found',
+                    'total_articles': 0
                 }
             
-            # Load legal documents for context
-            legal_context = await self._load_legal_context()
+            self.logger.info(f"Found {len(opinion_files)} opinion articles to analyze")
             
-            # Perform sentiment analysis
-            analysis_results = await self._analyze_articles_with_llm(opinion_articles, legal_context)
+            # Analyze each article
+            results = []
+            for article_file in opinion_files:
+                try:
+                    result = await self._analyze_single_article(article_file, law_summary)
+                    if result:
+                        results.append(result)
+                except Exception as e:
+                    self.logger.error(f"Failed to analyze article {article_file.name}: {e}")
+                    continue
             
-            # Generate report
-            report = await self._generate_sentiment_report(analysis_results)
+            # Generate and save CSV summary
+            await self._save_summary_csv(results)
             
-            # Save report
-            await self._save_report(report)
+            # Calculate summary statistics
+            summary_stats = self._calculate_summary_stats(results)
             
-            self.logger.info(f"Sentiment analysis completed: {len(analysis_results)} articles analyzed")
+            self.logger.info(f"Sentiment analysis completed: {len(results)} articles analyzed")
             
             return {
                 'success': True,
-                'total_articles_analyzed': len(analysis_results),
-                'report_file': str(self.output_file),
-                'summary': report.get('summary', {}),
+                'total_articles_analyzed': len(results),
+                'summary': summary_stats,
+                'summary_csv': str(self.summary_csv),
                 'analysis_timestamp': datetime.now().isoformat()
             }
             
         except Exception as e:
             self.logger.error(f"Sentiment analysis task failed: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'success': False,
                 'error': str(e),
                 'total_articles': 0,
-                'summary': {'positive': 0, 'negative': 0, 'neutral': 0},
                 'analysis_timestamp': datetime.now().isoformat()
             }
     
-    async def _load_opinion_articles(self) -> List[Dict[str, Any]]:
-        """Load opinion articles from JSON files with pre-processing filters."""
-        try:
-            articles = []
-            filtered_count = 0
-            
-            if not self.opinions_dir.exists():
-                self.logger.warning(f"Opinions directory not found: {self.opinions_dir}")
-                return articles
-            
-            # Find all JSON files
-            json_files = list(self.opinions_dir.glob("*.json"))
-            self.logger.info(f"Found {len(json_files)} opinion article files")
-            
-            for file_path in json_files:
-                try:
-                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                        content = await f.read()
-                        article = json.loads(content)
-                        
-                        # PRE-PROCESSING FILTER: Anti-Spam Check
-                        article_link = article.get('link', '')
-                        if not article_link:
-                            self.logger.debug(f"Skipping article {file_path.name}: No link field")
-                            filtered_count += 1
-                            continue
-                        
-                        # Filter out ads and external links
-                        if 'eclick.vn' in article_link:
-                            self.logger.info(f"⏭️  Skipping Ad/External Link: {article_link[:80]}...")
-                            filtered_count += 1
-                            continue
-                        
-                        if 'vnexpress.net' not in article_link:
-                            self.logger.info(f"⏭️  Skipping Ad/External Link: {article_link[:80]}...")
-                            filtered_count += 1
-                            continue
-                        
-                        # PRE-PROCESSING FILTER: Relevance Check
-                        # Get keyword from metadata (query field or matched_keyword)
-                        keyword = article.get('query') or article.get('matched_keyword') or article.get('matched_keywords', [])
-                        
-                        # Handle list of keywords
-                        if isinstance(keyword, list):
-                            keyword = keyword[0] if keyword else None
-                        
-                        if keyword:
-                            keyword_lower = keyword.lower()
-                            title = article.get('title', '').lower()
-                            sapo = article.get('sapo', '').lower()
-                            
-                            # Check if keyword appears in title or sapo
-                            if keyword_lower not in title and keyword_lower not in sapo:
-                                self.logger.info(f"⏭️  Skipping Irrelevant Article: '{keyword}' not in title/sapo")
-                                self.logger.debug(f"   Title: {article.get('title', '')[:60]}...")
-                                filtered_count += 1
-                                continue
-                        
-                        # Article passed all filters - add it
-                        article['file_path'] = str(file_path)
-                        articles.append(article)
-                        
-                except Exception as e:
-                    self.logger.error(f"Failed to load article from {file_path}: {e}")
-            
-            self.logger.info(f"✅ Successfully loaded {len(articles)} opinion articles (filtered {filtered_count} articles)")
-            return articles
-            
-        except Exception as e:
-            self.logger.error(f"Failed to load opinion articles: {e}")
-            return []
-    
-    async def _load_legal_context(self) -> str:
-        """Load legal documents and create context string."""
-        try:
-            context_parts = []
-            
-            if not self.legal_docs_dir.exists():
-                self.logger.warning(f"Legal documents directory not found: {self.legal_docs_dir}")
-                return "Legal Context: Technology and AI development regulations, data protection laws, and digital transformation policies."
-            
-            # Find all text files
-            text_files = list(self.legal_docs_dir.glob("*.txt"))
-            self.logger.info(f"Found {len(text_files)} legal document files")
-            
-            # Create some sample legal context if no files exist
-            if not text_files:
-                return "Legal Context: Technology and AI development regulations, data protection laws, and digital transformation policies."
-            
-            for file_path in text_files[:3]:  # Limit to first 3 documents to avoid context overflow
-                try:
-                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                        content = await f.read()
-                        
-                        # Limit content length
-                        if len(content) > 2000:
-                            content = content[:2000] + "...(truncated)"
-                        
-                        context_parts.append(f"Legal Document ({file_path.name}):\n{content}\n")
-                        
-                except Exception as e:
-                    self.logger.error(f"Failed to load legal document from {file_path}: {e}")
-            
-            if context_parts:
-                legal_context = "\n".join(context_parts)
-                self.logger.info(f"Loaded legal context from {len(context_parts)} documents")
-                return legal_context
-            else:
-                self.logger.warning("No legal documents found for context")
-                return "Legal Context: Technology and AI development regulations, data protection laws, and digital transformation policies."
-                
-        except Exception as e:
-            self.logger.error(f"Failed to load legal context: {e}")
-            return "Error loading legal context."
-    
-    async def _analyze_articles_with_llm(
-        self, 
-        articles: List[Dict[str, Any]], 
-        legal_context: str
-    ) -> List[Dict[str, Any]]:
-        """Analyze articles using LLM with legal context."""
-        try:
-            self.logger.info(f"Starting LLM analysis of {len(articles)} articles")
-            
-            # Initialize LLM client if not already done
-            if self.llm_client is None and LLMClient is not None:
-                llm_config = {
-                    'base_url': settings.ollama_base_url,
-                    'model': self.model_name,
-                    'temperature': self.temperature,
-                    'max_tokens': self.max_tokens,
-                    'timeout': settings.ollama_timeout
-                }
-                self.llm_client = LLMClient(llm_config)
-                
-                if not await self.llm_client.initialize():
-                    self.logger.error("Failed to initialize LLM client")
-                    return await self._fallback_analysis(articles)
-            
-            results = []
-            
-            # Process articles in batches to avoid overwhelming LLM
-            for i in range(0, len(articles), self.batch_size):
-                batch = articles[i:i + self.batch_size]
-                batch_results = await self._process_article_batch(batch, legal_context)
-                results.extend(batch_results)
-                
-                # Small delay between batches
-                if i + self.batch_size < len(articles):
-                    await asyncio.sleep(1)
-            
-            self.logger.info(f"LLM analysis completed: {len(results)} articles processed")
-            return results
-            
-        except Exception as e:
-            self.logger.error(f"LLM analysis failed: {e}")
-            return await self._fallback_analysis(articles)
-    
-    async def _process_article_batch(
-        self, 
-        batch: List[Dict[str, Any]], 
-        legal_context: str
-    ) -> List[Dict[str, Any]]:
-        """Process a batch of articles."""
-        results = []
+    async def _load_most_recent_law(self) -> Optional[Dict[str, Any]]:
+        """
+        Load the most recently crawled law from data/production/laws/*.json.
         
-        for article in batch:
-            try:
-                # Prepare prompt for this article
-                prompt = self.sentiment_prompt.format(
-                    legal_context=legal_context,
-                    title=article.get('title', ''),
-                    sapo=article.get('sapo', ''),
-                    content=article.get('content', article.get('sapo', ''))  # Use sapo as content fallback
-                )
-                
-                # Get LLM response
-                if self.llm_client is not None:
-                    response = await self.llm_client._generate_response(prompt)
-                    
-                    if response.error:
-                        self.logger.warning(f"LLM error for article {article.get('id')}: {response.error}")
-                        result = await self._fallback_single_article(article)
-                    else:
-                        # Parse LLM response
-                        result = await self._parse_llm_response(response.content, article)
+        Returns:
+            Dictionary with law data, or None if no laws found
+        """
+        try:
+            law_files = list(self.laws_dir.glob("*.json"))
+            if not law_files:
+                self.logger.warning("No law files found")
+                return None
+            
+            # Sort by modification time (most recent first)
+            law_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            most_recent_law_file = law_files[0]
+            
+            self.logger.info(f"Loading most recent law: {most_recent_law_file.name}")
+            
+            with open(most_recent_law_file, 'r', encoding='utf-8') as f:
+                law_data = json.load(f)
+            
+            # Try to load processed text if available
+            # Check if there's a processed text file
+            attachment_path = law_data.get('attachment_path', '')
+            if attachment_path:
+                processed_path = Path(attachment_path.replace('/raw/', '/processed/').replace('.pdf', '.txt'))
+                if processed_path.exists():
+                    with open(processed_path, 'r', encoding='utf-8') as f:
+                        processed_text = f.read()
+                        # Limit to first 5000 chars for context
+                        if len(processed_text) > 5000:
+                            processed_text = processed_text[:5000] + "...(truncated)"
+                        law_data['summary'] = processed_text
                 else:
-                    result = await self._fallback_single_article(article)
-                
-                results.append(result)
-                
-            except Exception as e:
-                self.logger.error(f"Failed to analyze article {article.get('id')}: {e}")
-                # Add fallback result
-                fallback_result = await self._fallback_single_article(article)
-                fallback_result['analysis_error'] = str(e)
-                results.append(fallback_result)
-        
-        return results
+                    # Use title and metadata as summary
+                    law_data['summary'] = f"{law_data.get('title', '')}\nDocument: {law_data.get('document_number', 'N/A')}"
+            
+            return law_data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load most recent law: {e}")
+            return None
     
-    async def _parse_llm_response(self, response_content: str, article: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse LLM response into structured result."""
+    async def _analyze_single_article(
+        self, 
+        article_file: Path, 
+        law_summary: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Analyze sentiment of a single article in the context of the law.
+        
+        Args:
+            article_file: Path to the opinion article JSON file
+            law_summary: Summary of the legal document context
+            
+        Returns:
+            Dictionary with analysis result, or None if analysis failed
+        """
+        try:
+            # Load article
+            with open(article_file, 'r', encoding='utf-8') as f:
+                article = json.load(f)
+            
+            article_title = article.get('title', '')
+            article_sapo = article.get('sapo', '')
+            
+            if not article_title:
+                self.logger.warning(f"Article {article_file.name} has no title, skipping")
+                return None
+            
+            # Build prompt according to specification
+            prompt = f"""CONTEXT (The Law):
+{law_summary}
+
+TARGET (The Article):
+Title: {article_title}
+Summary: {article_sapo}
+
+INSTRUCTION:
+Based on the provided Law Context, analyze the sentiment of the Article regarding the impact of this law on the 'Tech Industry/Innovation'.
+Is the article supporting the law, criticizing it, or neutral?
+
+RESPONSE FORMAT (JSON only):
+{{
+    "sentiment_label": "POSITIVE|NEGATIVE|NEUTRAL",
+    "confidence": 0.0-1.0,
+    "analysis_reasoning": "Brief explanation of the sentiment analysis"
+}}
+
+Labels:
+- POSITIVE: Supports the law/regulation, sees it as an enabler for tech.
+- NEGATIVE: Criticizes the law, sees it as a barrier/restriction.
+- NEUTRAL: Informational only.
+
+Analyze now:"""
+            
+            # Get LLM response
+            if self.llm_client:
+                response = await self.llm_client._generate_response(prompt)
+                
+                if response.error:
+                    self.logger.warning(f"LLM error for article {article_file.name}: {response.error}")
+                    # Use fallback
+                    sentiment_data = self._fallback_sentiment(article_title, article_sapo)
+                else:
+                    # Parse LLM response
+                    sentiment_data = self._parse_llm_response(response.content)
+                    if not sentiment_data:
+                        # Fallback if parsing fails
+                        sentiment_data = self._fallback_sentiment(article_title, article_sapo)
+            else:
+                # Fallback if LLM not available
+                sentiment_data = self._fallback_sentiment(article_title, article_sapo)
+            
+            # Update article JSON file
+            article['sentiment_label'] = sentiment_data['sentiment_label']
+            article['confidence'] = sentiment_data['confidence']
+            article['analysis_reasoning'] = sentiment_data['analysis_reasoning']
+            article['sentiment_analyzed_at'] = datetime.now().isoformat()
+            
+            # Save updated article
+            with open(article_file, 'w', encoding='utf-8') as f:
+                json.dump(article, f, ensure_ascii=False, indent=2)
+            
+            self.logger.info(f"✅ Analyzed article {article_file.name}: {sentiment_data['sentiment_label']} (confidence: {sentiment_data['confidence']:.2f})")
+            
+            return {
+                'article_id': article.get('id', article_file.stem),
+                'title': article_title,
+                'link': article.get('link', ''),
+                'date': article.get('date', ''),
+                'sentiment_label': sentiment_data['sentiment_label'],
+                'confidence': sentiment_data['confidence'],
+                'analysis_reasoning': sentiment_data['analysis_reasoning'],
+                'analyzed_at': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to analyze article {article_file.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _parse_llm_response(self, response_content: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse LLM response to extract sentiment data.
+        
+        Args:
+            response_content: Raw LLM response string
+            
+        Returns:
+            Dictionary with sentiment_label, confidence, analysis_reasoning, or None if parsing fails
+        """
         try:
             # Try to extract JSON from response
-            json_pattern = r'\{[^{}]*"sentiment"[^{}]*\}'
+            # Look for JSON object in the response
+            json_pattern = r'\{[^{}]*"sentiment_label"[^{}]*"analysis_reasoning"[^{}]*\}'
             matches = re.findall(json_pattern, response_content, re.DOTALL)
+            
+            if not matches:
+                # Try simpler pattern
+                json_pattern = r'\{.*?"sentiment_label".*?\}'
+                matches = re.findall(json_pattern, response_content, re.DOTALL)
             
             if matches:
                 json_str = matches[0]
                 parsed = json.loads(json_str)
                 
+                sentiment_label = parsed.get('sentiment_label', 'NEUTRAL').upper()
+                if sentiment_label not in self.sentiment_labels:
+                    sentiment_label = 'NEUTRAL'
+                
+                confidence = float(parsed.get('confidence', 0.5))
+                confidence = max(0.0, min(1.0, confidence))  # Clamp to [0, 1]
+                
+                analysis_reasoning = parsed.get('analysis_reasoning', 'No reasoning provided')
+                
                 return {
-                    'article_id': article.get('id'),
-                    'title': article.get('title'),
-                    'source': article.get('source'),
-                    'date': article.get('date'),
-                    'link': article.get('link'),
-                    'sentiment': parsed.get('sentiment', 'neutral').lower(),
-                    'confidence': float(parsed.get('confidence', 0.5)),
-                    'reasoning': parsed.get('reasoning', 'No reasoning provided'),
-                    'analysis_timestamp': datetime.now().isoformat(),
-                    'analysis_method': 'llm',
-                    'model_used': self.model_name
+                    'sentiment_label': sentiment_label,
+                    'confidence': confidence,
+                    'analysis_reasoning': analysis_reasoning
                 }
             else:
-                # Fallback if JSON parsing fails
-                self.logger.warning(f"Failed to parse JSON from LLM response for article {article.get('id')}")
-                return await self._fallback_single_article(article)
+                # Try to extract sentiment from text
+                response_lower = response_content.lower()
+                if 'positive' in response_lower:
+                    sentiment_label = 'POSITIVE'
+                elif 'negative' in response_lower:
+                    sentiment_label = 'NEGATIVE'
+                else:
+                    sentiment_label = 'NEUTRAL'
+                
+                # Try to extract confidence number
+                confidence_match = re.search(r'confidence[:\s]+([0-9.]+)', response_lower)
+                confidence = float(confidence_match.group(1)) if confidence_match else 0.5
+                confidence = max(0.0, min(1.0, confidence))
+                
+                return {
+                    'sentiment_label': sentiment_label,
+                    'confidence': confidence,
+                    'analysis_reasoning': response_content[:200]  # Use first 200 chars as reasoning
+                }
                 
         except Exception as e:
-            self.logger.error(f"Error parsing LLM response for article {article.get('id')}: {e}")
-            return await self._fallback_single_article(article)
+            self.logger.error(f"Error parsing LLM response: {e}")
+            return None
     
-    async def _fallback_analysis(self, articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Fallback analysis when LLM is not available."""
-        self.logger.warning("Using fallback sentiment analysis (rule-based)")
-        results = []
+    def _fallback_sentiment(self, title: str, sapo: str) -> Dict[str, Any]:
+        """
+        Fallback sentiment analysis using simple rule-based approach.
         
-        for article in articles:
-            result = await self._fallback_single_article(article)
-            results.append(result)
+        Args:
+            title: Article title
+            sapo: Article summary/sapo
+            
+        Returns:
+            Dictionary with sentiment_label, confidence, analysis_reasoning
+        """
+        text = f"{title} {sapo}".lower()
         
-        return results
-    
-    async def _fallback_single_article(self, article: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback sentiment analysis for a single article."""
-        # Simple rule-based sentiment analysis
-        title = article.get('title', '').lower()
-        sapo = article.get('sapo', '').lower()
-        text = f"{title} {sapo}"
+        # Simple keyword-based sentiment
+        positive_keywords = ['thành công', 'hiệu quả', 'phát triển', 'tiến bộ', 'tốt', 'đột phá', 'tích cực', 'hỗ trợ', 'khuyến khích']
+        negative_keywords = ['thất bại', 'vấn đề', 'chậm', 'khó khăn', 'sai sót', 'giảm', 'lo ngại', 'rủi ro', 'cản trở', 'hạn chế']
         
-        # Simple sentiment word lists (can be expanded)
-        positive_words = ['thành công', 'hiệu quả', 'phát triển', 'tiến bộ', 'tốt', 'đột phá', 'tích cực', 'hiệu quả']
-        negative_words = ['thất bại', 'vấn đề', 'chậm', 'khó khăn', 'sai sót', 'giảm', 'lo ngại', 'rủi ro']
-        
-        positive_count = sum(1 for word in positive_words if word in text)
-        negative_count = sum(1 for word in negative_words if word in text)
+        positive_count = sum(1 for word in positive_keywords if word in text)
+        negative_count = sum(1 for word in negative_keywords if word in text)
         
         if positive_count > negative_count:
-            sentiment = 'positive'
-            confidence = min(0.8, positive_count / (positive_count + negative_count + 1))
+            sentiment_label = 'POSITIVE'
+            confidence = min(0.7, 0.5 + (positive_count * 0.1))
         elif negative_count > positive_count:
-            sentiment = 'negative'
-            confidence = min(0.8, negative_count / (positive_count + negative_count + 1))
+            sentiment_label = 'NEGATIVE'
+            confidence = min(0.7, 0.5 + (negative_count * 0.1))
         else:
-            sentiment = 'neutral'
+            sentiment_label = 'NEUTRAL'
             confidence = 0.5
         
-        reasoning = f"Rule-based analysis: {positive_count} positive words, {negative_count} negative words found"
+        reasoning = f"Rule-based analysis: {positive_count} positive indicators, {negative_count} negative indicators"
         
         return {
-            'article_id': article.get('id'),
-            'title': article.get('title'),
-            'source': article.get('source'),
-            'date': article.get('date'),
-            'link': article.get('link'),
-            'sentiment': sentiment,
+            'sentiment_label': sentiment_label,
             'confidence': confidence,
-            'reasoning': reasoning,
-            'analysis_timestamp': datetime.now().isoformat(),
-            'analysis_method': 'rule_based_fallback',
-            'model_used': None
+            'analysis_reasoning': reasoning
         }
     
-    async def _generate_sentiment_report(self, analysis_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate comprehensive sentiment report."""
-        try:
-            # Calculate summary statistics
-            total_articles = len(analysis_results)
-            sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
-            total_confidence = 0.0
-            method_counts = {'llm': 0, 'rule_based_fallback': 0}
-            
-            for result in analysis_results:
-                sentiment = result.get('sentiment', 'neutral')
-                if sentiment in sentiment_counts:
-                    sentiment_counts[sentiment] += 1
-                
-                total_confidence += result.get('confidence', 0.0)
-                method = result.get('analysis_method', 'unknown')
-                if method in method_counts:
-                    method_counts[method] += 1
-            
-            avg_confidence = total_confidence / total_articles if total_articles > 0 else 0.0
-            
-            # Generate report
-            report = {
-                'analysis_timestamp': datetime.now().isoformat(),
-                'total_articles': total_articles,
-                'summary': {
-                    'positive': sentiment_counts['positive'],
-                    'negative': sentiment_counts['negative'],
-                    'neutral': sentiment_counts['neutral'],
-                    'average_confidence': round(avg_confidence, 3),
-                    'analysis_methods': method_counts
-                },
-                'details': analysis_results,
-                'metadata': {
-                    'agent': self.name,
-                    'model_used': self.model_name,
-                    'confidence_threshold': self.confidence_threshold,
-                    'batch_size': self.batch_size,
-                    'legal_context_available': True
-                }
-            }
-            
-            self.logger.info(f"Generated sentiment report: {sentiment_counts}")
-            return report
-            
-        except Exception as e:
-            self.logger.error(f"Failed to generate sentiment report: {e}")
+    def _calculate_summary_stats(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate summary statistics from analysis results."""
+        total = len(results)
+        if total == 0:
             return {
-                'analysis_timestamp': datetime.now().isoformat(),
-                'total_articles': 0,
-                'summary': {'positive': 0, 'negative': 0, 'neutral': 0},
-                'details': [],
-                'error': str(e)
+                'total': 0,
+                'positive': 0,
+                'negative': 0,
+                'neutral': 0,
+                'average_confidence': 0.0
             }
+        
+        positive_count = sum(1 for r in results if r.get('sentiment_label') == 'POSITIVE')
+        negative_count = sum(1 for r in results if r.get('sentiment_label') == 'NEGATIVE')
+        neutral_count = sum(1 for r in results if r.get('sentiment_label') == 'NEUTRAL')
+        
+        avg_confidence = sum(r.get('confidence', 0.0) for r in results) / total
+        
+        return {
+            'total': total,
+            'positive': positive_count,
+            'negative': negative_count,
+            'neutral': neutral_count,
+            'average_confidence': round(avg_confidence, 3)
+        }
     
-    async def _save_report(self, report: Dict[str, Any]) -> bool:
-        """Save sentiment report to JSON file."""
+    async def _save_summary_csv(self, results: List[Dict[str, Any]]):
+        """
+        Save sentiment analysis summary to CSV file.
+        
+        Args:
+            results: List of analysis results
+        """
         try:
-            # Create backup of existing report if it exists
-            if self.output_file.exists():
-                backup_file = self.output_file.with_suffix('.json.bak')
-                import os
-                if os.name == 'nt':  # Windows
-                    import shutil
-                    shutil.copy2(self.output_file, backup_file)
-                else:
-                    os.rename(self.output_file, backup_file)
-            
-            # Save new report
-            async with aiofiles.open(self.output_file, 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(report, indent=2, ensure_ascii=False))
-            
-            self.logger.info(f"Sentiment report saved to: {self.output_file}")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to save sentiment report: {e}")
-            return False
-    
-    async def get_analysis_status(self) -> Dict[str, Any]:
-        """Get current analysis status."""
-        try:
-            # Check if output file exists and load it
-            if self.output_file.exists():
-                async with aiofiles.open(self.output_file, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                    report = json.loads(content)
-                    
-                return {
-                    'last_analysis': report.get('analysis_timestamp'),
-                    'total_articles_analyzed': report.get('total_articles', 0),
-                    'summary': report.get('summary', {}),
-                    'report_file': str(self.output_file)
-                }
-            else:
-                return {
-                    'last_analysis': None,
-                    'total_articles_analyzed': 0,
-                    'summary': {},
-                    'report_file': str(self.output_file),
-                    'status': 'No analysis performed yet'
-                }
+            with open(self.summary_csv, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
                 
-        except Exception as e:
-            self.logger.error(f"Failed to get analysis status: {e}")
-            return {
-                'error': str(e),
-                'status': 'Error retrieving status'
-            }
-    
-    async def analyze_single_article(self, article_id: str) -> Dict[str, Any]:
-        """Analyze a single article by ID."""
-        try:
-            # Load article file
-            article_file = self.opinions_dir / f"{article_id}.json"
-            
-            if not article_file.exists():
-                return {
-                    'success': False,
-                    'error': f'Article file not found: {article_file}'
-                }
-            
-            async with aiofiles.open(article_file, 'r', encoding='utf-8') as f:
-                content = await f.read()
-                article = json.loads(content)
-            
-            # Load legal context
-            legal_context = await self._load_legal_context()
-            
-            # Analyze single article
-            results = await self._analyze_articles_with_llm([article], legal_context)
-            
-            if results:
-                return {
-                    'success': True,
-                    'analysis': results[0]
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': 'Analysis failed'
-                }
+                # Write header
+                writer.writerow([
+                    'Article ID',
+                    'Title',
+                    'Link',
+                    'Date',
+                    'Sentiment Label',
+                    'Confidence',
+                    'Analysis Reasoning',
+                    'Analyzed At'
+                ])
                 
+                # Write data rows
+                for result in results:
+                    writer.writerow([
+                        result.get('article_id', ''),
+                        result.get('title', ''),
+                        result.get('link', ''),
+                        result.get('date', ''),
+                        result.get('sentiment_label', ''),
+                        result.get('confidence', 0.0),
+                        result.get('analysis_reasoning', ''),
+                        result.get('analyzed_at', '')
+                    ])
+            
+            self.logger.info(f"Sentiment summary saved to: {self.summary_csv}")
+            
         except Exception as e:
-            self.logger.error(f"Failed to analyze single article {article_id}: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            self.logger.error(f"Failed to save summary CSV: {e}")
+            raise
     
     async def shutdown(self):
         """Shutdown sentiment analysis agent."""
         self.logger.info("Shutting down sentiment analysis agent")
         
-        # Shutdown LLM client if it exists
-        if self.llm_client is not None:
+        if self.llm_client:
             try:
                 await self.llm_client.shutdown()
-                self.logger.info("LLM client shutdown complete")
             except Exception as e:
                 self.logger.error(f"Error shutting down LLM client: {e}")
         
         self.logger.info("Sentiment analysis agent shutdown complete")
 
 
-# Utility functions for standalone usage
-async def run_sentiment_analysis(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Run sentiment analysis independently.
+async def main():
+    """Main entry point for standalone sentiment analysis agent."""
+    import sys
+    from pathlib import Path
     
-    Args:
-        config: Configuration dictionary
-        
-    Returns:
-        Analysis result dictionary
-    """
-    agent = SentimentAnalysisAgent(config)
+    # Add project root to path
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    
+    # Load configuration
+    try:
+        from utils.config import load_config
+        config_file = project_root / "config" / "agents.yaml"
+        if config_file.exists():
+            full_config = load_config(str(config_file))
+            agent_config = full_config.get('agents', {}).get('sentiment_analysis_agent', {})
+        else:
+            agent_config = {}
+    except Exception as e:
+        print(f"⚠️  Could not load config, using defaults: {e}")
+        agent_config = {}
+    
+    # Initialize agent
+    agent = SentimentAnalysisAgent(agent_config)
     
     try:
-        # Initialize agent
-        await agent.initialize()
+        # Initialize
+        initialized = await agent.initialize()
+        if not initialized:
+            print("❌ Failed to initialize sentiment analysis agent")
+            sys.exit(1)
         
-        # Run analysis task
+        # Run analysis
         result = await agent.analyze_sentiment()
-        return result
         
-    finally:
+        # Print results
+        if result.get('success'):
+            print(f"\n✅ Sentiment analysis completed successfully")
+            print(f"   Total articles analyzed: {result.get('total_articles_analyzed', 0)}")
+            summary = result.get('summary', {})
+            print(f"   Positive: {summary.get('positive', 0)}")
+            print(f"   Negative: {summary.get('negative', 0)}")
+            print(f"   Neutral: {summary.get('neutral', 0)}")
+            print(f"   Average confidence: {summary.get('average_confidence', 0.0)}")
+            print(f"   Summary CSV: {result.get('summary_csv', '')}")
+        else:
+            print(f"\n❌ Sentiment analysis failed: {result.get('error', 'Unknown error')}")
+        
         # Cleanup
         await agent.shutdown()
+        
+        # Exit
+        sys.exit(0 if result.get('success') else 1)
+        
+    except Exception as e:
+        print(f"\n❌ Fatal error in sentiment analysis agent: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        try:
+            await agent.shutdown()
+        except:
+            pass
+        
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    # Example usage
-    async def main():
-        config = {
-            'model': 'llama3:latest',
-            'temperature': 0.3,
-            'confidence_threshold': 0.7,
-            'batch_size': 3
-        }
-        
-        result = await run_sentiment_analysis(config)
-        print(f"Analysis result: {result}")
-    
     asyncio.run(main())

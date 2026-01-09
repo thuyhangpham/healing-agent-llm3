@@ -1,17 +1,17 @@
 {
-  "Luật Trí tuệ nhân tạo": {
-    "last_page": 1,
-    "last_updated": "2025-12-29T08:35:29.288005",
-    "status": "active"
-  },
   "Công nghiệp công nghệ số": {
-    "last_page": 1,
-    "last_updated": "2025-12-29T08:35:29.288005",
-    "status": "active"
+    "last_page": 2,
+    "last_updated": "2026-01-03T18:18:52.666152",
+    "status": "cooldown"
   },
   "Luật Trí tuệ nhân tạo 2025": {
-    "last_page": 1,
-    "last_updated": "2025-12-29T08:35:29.288005",
-    "status": "active"
+    "last_page": 2,
+    "last_updated": "2026-01-03T18:19:13.785527",
+    "status": "cooldown"
+  },
+  "Luật Trí tuệ nhân tạo": {
+    "last_page": 2,
+    "last_updated": "2026-01-03T18:15:32.379833",
+    "status": "cooldown"
   }
 }

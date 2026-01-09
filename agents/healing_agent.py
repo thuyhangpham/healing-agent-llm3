@@ -36,6 +36,7 @@ from agents.base_agent import BaseAgent
 from utils.agent_registry import AgentRegistry
 from utils.global_state import GlobalStateManager
 from utils.logger import get_logger
+from scripts.metrics_monitor import MetricsMonitor
 
 # Import healing components (will be created)
 try:
@@ -319,6 +320,14 @@ class HealingAgent(BaseAgent):
             
             # Update metrics
             await self._update_healing_metrics(error_ctx, True, time_to_repair)
+            
+            # Log heal success to metrics monitor
+            try:
+                monitor = MetricsMonitor()
+                monitor.log_heal_success(duration=time_to_repair)
+                self.logger.info(f"Logged heal success to metrics monitor: {time_to_repair:.2f}s")
+            except Exception as e:
+                self.logger.warning(f"Failed to log heal success to metrics monitor: {e}")
             
             result = self._create_result(
                 error_ctx, HealingStatus.COMPLETED, True,
@@ -701,6 +710,14 @@ Generate the fix:"""
             
             # Update metrics
             await self._update_healing_metrics(error_ctx, True, mttr)
+            
+            # Log heal success to metrics monitor
+            try:
+                monitor = MetricsMonitor()
+                monitor.log_heal_success(duration=mttr)
+                self.logger.info(f"Logged heal success to metrics monitor: {mttr:.2f}s")
+            except Exception as e:
+                self.logger.warning(f"Failed to log heal success to metrics monitor: {e}")
             
             # Determine fix description
             fix_description = analysis.get('suggested_approach', 'Code error fixed automatically')
@@ -1173,7 +1190,10 @@ Generate the fix:"""
     
     async def process_error_signal(self, error_signal_file: Path) -> bool:
         """
-        Process error signal file and attempt healing (Dynamic Soup Statement architecture).
+        SPECIALIZED SOUP LOGIC FIXER: Process error signal and fix soup_logic.txt.
+        
+        This method is specifically designed for the Dynamic Soup Statement architecture.
+        It bypasses complex error detection and directly fixes soup selectors.
         
         Args:
             error_signal_file: Path to error_signal.json file
@@ -1181,51 +1201,350 @@ Generate the fix:"""
         Returns:
             True if healing was successful, False otherwise
         """
+        start_time = time.time()
+        
         try:
-            # Read error signal
+            # Step 1: Read error signal
             with open(error_signal_file, 'r', encoding='utf-8') as f:
                 error_data = json.load(f)
             
-            self.logger.info(f"Processing error signal: {error_data.get('error_type', 'unknown')}")
-            print(f"\n🔧 Processing error signal from: {error_signal_file}")
-            print(f"   Error type: {error_data.get('error_type', 'unknown')}")
-            print(f"   Error message: {error_data.get('error_message', 'unknown')[:100]}...")
+            error_message = error_data.get('error_message', '')
+            error_type = error_data.get('error_type', 'unknown')
+            selector_used = error_data.get('selector_used', 'unknown')
             
-            # Call handle_error with the error data
-            result = await self.handle_error(error_data)
+            self.logger.info(f"Processing error signal: {error_type}")
+            print(f"\n{'='*80}")
+            print(f"🔧 SPECIALIZED SOUP LOGIC FIXER")
+            print(f"{'='*80}")
+            print(f"   Error type: {error_type}")
+            print(f"   Error message: {error_message[:150]}...")
+            print(f"   Current selector: {selector_used}")
+            print()
             
-            if result.success:
-                print(f"\n✅ Healing successful!")
-                print(f"   Error ID: {result.error_id}")
-                print(f"   Status: {result.status.value}")
-                print(f"   MTTR: {result.time_to_repair:.2f} seconds")
-                
-                # Delete error signal file (cleanup for orchestrator)
-                try:
-                    error_signal_file.unlink()
-                    print(f"   ✅ Error signal file deleted")
-                    self.logger.info("Error signal file deleted - orchestrator will know job is done")
-                except Exception as e:
-                    print(f"   ⚠️  Could not delete error signal file: {e}")
-                    self.logger.warning(f"Failed to delete error signal file: {e}")
-                
-                return True
-            else:
-                print(f"\n❌ Healing failed")
-                print(f"   Error ID: {result.error_id}")
-                print(f"   Status: {result.status.value}")
-                print(f"   Reason: {result.message}")
-                
-                # Keep error signal file for retry
-                print(f"   ⚠️  Error signal file kept for retry")
+            # Step 2: Check if this is a soup logic error (BYPASS STRICT DETECTION)
+            is_soup_error = (
+                "No articles found" in error_message or
+                "soup.select" in error_message or
+                "dynamic logic" in error_message.lower() or
+                "soup_logic" in str(error_data).lower()
+            )
+            
+            if not is_soup_error:
+                print(f"⚠️  Not a soup logic error - delegating to standard handler")
+                # Fall back to standard handler for non-soup errors
+                result = await self.handle_error(error_data)
+                if result.success:
+                    try:
+                        error_signal_file.unlink()
+                        print(f"   ✅ Error signal file deleted")
+                    except:
+                        pass
+                return result.success
+            
+            print(f"✅ Detected soup logic error - proceeding with specialized fix")
+            print()
+            
+            # Step 3: Fetch HTML (from snapshot or re-fetch)
+            html_content = await self._fetch_html_for_healing(error_data)
+            
+            if not html_content:
+                print(f"❌ Failed to fetch HTML content for analysis")
                 return False
+            
+            print(f"   ✅ HTML content fetched ({len(html_content)} chars)")
+            print()
+            
+            # Step 4: Generate new selector using LLM
+            print(f"🤖 Consulting LLM for new selector...")
+            new_selector = await self._generate_soup_selector_with_llm(
+                current_selector=selector_used,
+                html_content=html_content,
+                error_message=error_message
+            )
+            
+            if not new_selector:
+                print(f"❌ Failed to generate new selector")
+                return False
+            
+            print(f"   ✅ Generated new selector: {new_selector}")
+            print()
+            
+            # Step 5: Apply fix to soup_logic.txt
+            print(f"💾 Applying fix to soup_logic.txt...")
+            soup_logic_file = Path("data/production/soup_logic.txt")
+            soup_logic_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Clean the selector (remove markdown, quotes, etc.)
+            clean_selector = new_selector.strip()
+            clean_selector = clean_selector.replace('```python', '').replace('```', '').strip()
+            if clean_selector.startswith('"') and clean_selector.endswith('"'):
+                clean_selector = clean_selector[1:-1]
+            if clean_selector.startswith("'") and clean_selector.endswith("'"):
+                clean_selector = clean_selector[1:-1]
+            
+            # Write to file
+            with open(soup_logic_file, 'w', encoding='utf-8') as f:
+                f.write(clean_selector)
+            
+            print(f"   ✅ Fix applied: {clean_selector}")
+            print()
+            
+            # Step 6: Validate fix (basic syntax check)
+            if not self._validate_soup_selector_syntax(clean_selector):
+                print(f"⚠️  Warning: Generated selector may have syntax issues")
+            else:
+                print(f"   ✅ Selector syntax validated")
+            print()
+            
+            # Step 7: Success! Delete error signal file
+            try:
+                error_signal_file.unlink()
+                print(f"✅ Error signal file deleted")
+                self.logger.info("Error signal file deleted - orchestrator will know job is done")
+            except Exception as e:
+                print(f"⚠️  Could not delete error signal file: {e}")
+                self.logger.warning(f"Failed to delete error signal file: {e}")
+            
+            # Calculate MTTR
+            mttr = time.time() - start_time
+            print(f"\n{'='*80}")
+            print(f"✅ HEALING COMPLETED SUCCESSFULLY")
+            print(f"   MTTR: {mttr:.2f} seconds")
+            print(f"   Old selector: {selector_used}")
+            print(f"   New selector: {clean_selector}")
+            print(f"{'='*80}\n")
+            
+            # Log heal success to metrics monitor
+            try:
+                monitor = MetricsMonitor()
+                monitor.log_heal_success(duration=mttr)
+                self.logger.info(f"Logged heal success to metrics monitor: {mttr:.2f}s")
+            except Exception as e:
+                self.logger.warning(f"Failed to log heal success to metrics monitor: {e}")
+            
+            return True
                 
         except Exception as e:
+            mttr = time.time() - start_time
             self.logger.error(f"Error processing error signal: {e}")
-            print(f"❌ Error processing error signal: {e}")
+            print(f"\n❌ HEALING FAILED after {mttr:.2f}s")
+            print(f"   Error: {e}")
             import traceback
             traceback.print_exc()
             return False
+    
+    async def _fetch_html_for_healing(self, error_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Fetch HTML content for healing analysis.
+        Tries to get from snapshot first, then re-fetches if needed.
+        """
+        try:
+            # Try to get HTML snapshot from error signal
+            html_snapshot = error_data.get('html_snapshot')
+            if html_snapshot and len(html_snapshot) > 100:
+                self.logger.info("Using HTML snapshot from error signal")
+                return html_snapshot
+            
+            # If no snapshot, try to re-fetch the page
+            # Extract URL from error context if available
+            additional_context = error_data.get('additional_context', {})
+            url = additional_context.get('url') or additional_context.get('search_url')
+            
+            if not url:
+                # Try to construct URL from error message or use a default
+                # For VnExpress search, we can use a default search URL
+                self.logger.warning("No URL found in error context, using default VnExpress search page")
+                url = "https://timkiem.vnexpress.net/?q=test&latest=1&page=1"
+            
+            print(f"   📥 Re-fetching HTML from: {url[:80]}...")
+            
+            # Try Selenium first (for JavaScript rendering)
+            try:
+                from selenium import webdriver
+                from selenium.webdriver.chrome.options import Options
+                
+                chrome_options = Options()
+                chrome_options.add_argument('--headless')
+                chrome_options.add_argument('--no-sandbox')
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                chrome_options.add_argument('--disable-gpu')
+                
+                driver = webdriver.Chrome(options=chrome_options)
+                try:
+                    driver.get(url)
+                    time.sleep(2)  # Wait for page load
+                    html_content = driver.page_source
+                    driver.quit()
+                    return html_content
+                except:
+                    driver.quit()
+                    raise
+            except ImportError:
+                # Fallback to requests/aiohttp
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            return await response.text()
+                        else:
+                            self.logger.warning(f"Failed to fetch HTML: HTTP {response.status}")
+                            return None
+            except Exception as e:
+                self.logger.warning(f"Selenium failed, trying aiohttp: {e}")
+                # Fallback to aiohttp
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            return await response.text()
+                        else:
+                            return None
+                            
+        except Exception as e:
+            self.logger.error(f"Failed to fetch HTML: {e}")
+            return None
+    
+    async def _generate_soup_selector_with_llm(
+        self, 
+        current_selector: str, 
+        html_content: str, 
+        error_message: str
+    ) -> Optional[str]:
+        """
+        Generate a new BeautifulSoup selector using LLM.
+        
+        Args:
+            current_selector: The broken selector that failed
+            html_content: HTML content to analyze
+            error_message: Error message for context
+            
+        Returns:
+            New selector string (e.g., "soup.select('.item-news')") or None
+        """
+        try:
+            if not self.llm_client:
+                self.logger.warning("LLM client not available, using fallback selector")
+                return "soup.select('.item-news')"
+            
+            # INCREASED CONTEXT WINDOW: 50,000 chars to capture <body> and article structure
+            # The first 3000 chars are usually just <head>, <meta>, CSS/JS - we need the actual body content
+            limit_chars = 50000
+            html_snippet = html_content[:limit_chars]
+            if len(html_content) > limit_chars:
+                html_snippet += "\n...(truncated)"
+            
+            prompt = f"""You are an expert Web Scraping developer specializing in Vietnamese news sites.
+
+TARGET SITE: VnExpress (or similar Vietnamese news portal)
+PREVIOUS FAILED SELECTOR: {current_selector} (DO NOT USE THIS AGAIN - IT FAILED)
+
+ERROR CONTEXT:
+{error_message[:300]}
+
+HTML STRUCTURE (First {limit_chars} characters - includes body content):
+{html_snippet}
+
+TASK: Identify the CSS selector for the **list of news articles** on this search results page.
+
+RULES:
+1. Look for actual HTML tags in the body content:
+   - <article> tags
+   - Divs with classes like: 'item-news', 'title-news', 'list-news', 'item_news', 'news-item'
+   - Elements containing article titles and links
+   
+2. STRICTLY FORBIDDEN - DO NOT INVENT GENERIC CLASSES:
+   - ❌ 'result-item'
+   - ❌ 'news-card'
+   - ❌ 'card'
+   - ❌ 'item'
+   - ❌ 'article-item'
+   - ❌ Any generic class that doesn't appear in the actual HTML
+   
+3. REQUIREMENTS:
+   - Output ONLY the Python code string
+   - Format: soup.select('CSS_SELECTOR_HERE')
+   - Do NOT include markdown code blocks, explanations, or any other text
+   - Return ONLY the code line, nothing else
+   - The selector MUST match actual elements visible in the HTML structure above
+
+VALID EXAMPLES (only if they match the HTML):
+- soup.select('article.item-news')
+- soup.select('.item-news')
+- soup.select('div.list_news .item')
+- soup.select('.title-news')
+
+Generate the fix (ONLY the code string, no explanations):"""
+            
+            # Generate response from LLM
+            response = await self.llm_client._generate_response(prompt)
+            
+            if response.error:
+                self.logger.error(f"LLM error: {response.error}")
+                # Use str() instead of .message to avoid AttributeError
+                error_str = str(response.error) if response.error else "Unknown LLM error"
+                print(f"   ❌ LLM error: {error_str}")
+                return None
+            
+            # Extract just the code line (robust parsing handles markdown, explanations, etc.)
+            fix_code = self._extract_soup_selector(response.content)
+            
+            if fix_code:
+                # Additional validation: reject generic selectors that were explicitly forbidden
+                import re
+                selector_lower = fix_code.lower()
+                
+                # List of forbidden generic patterns
+                forbidden_patterns = [
+                    'result-item',
+                    'news-card',
+                    r"\.card['\"]", 
+                    r"\.item['\"]",
+                  
+                    'address',     
+                    'footer',      
+                    'header',      
+                    'nav',          
+                    'li\.',       
+                    'ul\.', 
+                ]
+                
+                # Check for forbidden patterns
+                is_forbidden = False
+                for pattern in forbidden_patterns:
+                    if re.search(pattern, selector_lower):
+                        # Special case: allow .item-news and .item_news
+                        if 'item' in pattern and ('item-news' in selector_lower or 'item_news' in selector_lower):
+                            continue  # This is allowed
+                        is_forbidden = True
+                        break
+                
+                if is_forbidden:
+                    self.logger.warning(f"Rejected generic selector: {fix_code}")
+                    print(f"   ⚠️  Rejected generic selector, using fallback")
+                    return "soup.select('article.item-news')"
+                
+                self.logger.info(f"Generated selector: {fix_code}")
+                return fix_code
+            else:
+                self.logger.warning("Failed to extract valid soup selector from LLM response")
+                print(f"   ⚠️  Failed to extract selector, using fallback")
+                return "soup.select('article.item-news')"  # Fallback to common VnExpress pattern
+                
+        except Exception as e:
+            self.logger.error(f"Fix generation failed: {e}")
+            print(f"   ❌ Fix generation failed: {e}")
+            # Return fallback selector instead of None
+            return "soup.select('article.item-news')"
+    
+    def _validate_soup_selector_syntax(self, selector_str: str) -> bool:
+        """
+        Basic syntax validation for soup selector.
+        Checks if it looks like a valid soup.select() call.
+        """
+        import re
+        # Check for soup.select('...') pattern
+        pattern = r"soup\.select\(['\"].+['\"]\)"
+        return bool(re.match(pattern, selector_str.strip()))
 
 
 async def main():

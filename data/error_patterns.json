@@ -13,5 +13,35 @@
       "Update CSS selectors to match current page structure"
     ],
     "success_rate": 1.0
+  },
+  "type_error:opinion_search_agent:Exception": {
+    "pattern_id": "type_error:opinion_search_agent:Exception",
+    "error_type": "Exception",
+    "frequency": 2,
+    "first_seen": "2025-12-29T23:17:52.948189",
+    "last_seen": "2025-12-29T23:18:22.822145",
+    "affected_agents": [
+      "opinion_search_agent"
+    ],
+    "common_context": {},
+    "suggested_fixes": [
+      "Manual intervention required - error not automatically repairable"
+    ],
+    "success_rate": 0.0
+  },
+  "unknown_error:opinion_search_agent:ProcessCrash": {
+    "pattern_id": "unknown_error:opinion_search_agent:ProcessCrash",
+    "error_type": "ProcessCrash",
+    "frequency": 23,
+    "first_seen": "2025-12-30T17:52:49.559111",
+    "last_seen": "2025-12-30T17:52:49.559111",
+    "affected_agents": [
+      "opinion_search_agent"
+    ],
+    "common_context": {},
+    "suggested_fixes": [
+      "Manual intervention required - error not automatically repairable"
+    ],
+    "success_rate": 0.0
   }
 }
